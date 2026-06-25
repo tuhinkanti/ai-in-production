@@ -858,7 +858,7 @@
       <div class="sig">FIG. 00 · COVER</div>
 
       <aside class="notes">
-        Hi, I'm Tuhin Sharma, a Principal Software Engineer. Today I'm going to walk you through how I built an autonomous agent to right-size compute capacity across thousands of repositories — what worked, what failed, and what I learned about building AI agents that actually ship in production.
+        Hi, I'm Tuhin Sharma, a Principal Software Engineer. Today I'm going to walk you through how we built an autonomous agent to right-size compute capacity across thousands of repositories — what worked, what failed, and what we learned about building AI agents that actually ship in production.
       </aside>
     </section>
 
@@ -904,7 +904,7 @@
       <div style="position:absolute;inset:112px 120px 90px;display:grid;grid-template-columns:0.9fr 1.1fr;gap:72px;align-items:center">
         <div>
           <div class="eyebrow">Agenda</div>
-          <h2 style="font-family:Geist,sans-serif;font-size:70px;line-height:1.02;letter-spacing:-2.4px;margin:0;color:var(--ink)">How I built an agent that <em style="color:var(--clay);font-style:normal">worked.</em></h2>
+          <h2 style="font-family:Geist,sans-serif;font-size:70px;line-height:1.02;letter-spacing:-2.4px;margin:0;color:var(--ink)">How we built an agent that <em style="color:var(--clay);font-style:normal">worked.</em></h2>
         </div>
 
         <ol style="list-style:none;counter-reset:agenda;padding:0;margin:0;display:grid;gap:14px">
@@ -926,13 +926,13 @@
           </li>
           <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
             <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">05</span>
-            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">Context engineering &rarr; a plan I trust, every run</span>
+            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">Context engineering &rarr; a plan we trust, every run</span>
           </li>
         </ol>
       </div>
 
       <aside class="notes">
-        Quick agenda. I'll start with the capacity problem — Helm charts sprawled across thousands of repositories. Then v1 versus v2 and where the prompt and sub-agent versions broke. Then the reframe — Agent equals Model plus Harness. Then two kinds of work: reasoning versus structured, and where ILP fits. I close with context engineering — how iterating on the harness took the agent to a plan I trust, the same plan every run.
+        Quick agenda. We'll start with the capacity problem — Helm charts sprawled across thousands of repositories. Then v1 versus v2 and where the prompt and sub-agent versions broke. Then the reframe — Agent equals Model plus Harness. Then two kinds of work: reasoning versus structured, and where ILP fits. We close with context engineering — how iterating on the harness took the agent to a plan we trust, the same plan every run.
       </aside>
     </section>
 
@@ -951,7 +951,7 @@
       </div>
 
       <aside class="notes">
-        Chapter 1. Before we get to agents, let me set up the actual problem we were trying to solve. It's a boring infrastructure problem — but it turns out to be exactly the kind of problem AI agents are good at, and bad at, in interesting ways.
+        Chapter 1. Before we get to agents, let us set up the actual problem we were trying to solve. It's a boring infrastructure problem — but it turns out to be exactly the kind of problem AI agents are good at, and bad at, in interesting ways.
       </aside>
     </section>
 
@@ -1127,7 +1127,7 @@
       </div>
 
       <aside class="notes">
-        Chapter 2. I have seen the sprawl. The goal: an autonomous agent that right-sizes these Helm charts safely at scale, driven by real-time utilization data from the fleet. To do that the agent has to discover the repo shape, understand how CPU is configured across instances, edit the right files, and open a PR. The first version struggled — and the way it struggled is what shaped everything after.
+        Chapter 2. We have seen the sprawl. The goal: an autonomous agent that right-sizes these Helm charts safely at scale, driven by real-time utilization data from the fleet. To do that the agent has to discover the repo shape, understand how CPU is configured across instances, edit the right files, and open a PR. The first version struggled — and the way it struggled is what shaped everything after.
       </aside>
     </section>
 
@@ -1279,7 +1279,7 @@
       </div>
 
       <aside class="notes">
-        With prompts, we could right-size the standard 30% of services. But for the other 70%, the prompt just kept growing, and v1 stopped working. So I tried the obvious next move: split the work into specialists.
+        With prompts, we could right-size the standard 30% of services. But for the other 70%, the prompt just kept growing, and v1 stopped working. So we tried the obvious next move: split the work into specialists.
       </aside>
     </section>
 
@@ -1307,7 +1307,7 @@
       </div>
 
       <aside class="notes">
-        Around that time, sub-agents were everywhere. Every blog post, every framework, multi-agent in the title. It felt like this was it. The logic felt airtight — if one prompt can't scale, give each task its own. So we built this. Two weeks of work. Nine boxes. Every sub-agent gets its own task. Surely this scales. I'll be honest at that time I felt — [beat] it was beautiful.
+        Around that time, sub-agents were everywhere. Every blog post, every framework, multi-agent in the title. It felt like this was it. The logic felt airtight — if one prompt can't scale, give each task its own. So we built this. Two weeks of work. Nine boxes. Every sub-agent gets its own task. Surely this scales. We'll be honest — at that time it felt — [beat] beautiful.
       </aside>
     </section>
 
@@ -1397,7 +1397,7 @@
       </div>
 
       <aside class="notes">
-        Two pull requests, side by side. Same input behind both. You don't need to read the YAML — different number of files, different files, different numbers inside them. Structurally different PRs for the same problem. If you have a recommendation system you trust enough to open a PR, and same input gives you a different PR every run — you don't have an agent. You have a slot machine. I stared at these two PRs for a long time — and the fix didn't come from the model. It came from rethinking what an agent even is.
+        Two pull requests, side by side. Same input behind both. You don't need to read the YAML — different number of files, different files, different numbers inside them. Structurally different PRs for the same problem. If you have a recommendation system you trust enough to open a PR, and same input gives you a different PR every run — you don't have an agent. You have a slot machine. We stared at these two PRs for a long time — and the fix didn't come from the model. It came from rethinking what an agent even is.
       </aside>
     </section>
 
@@ -1411,7 +1411,7 @@
       <div class="s-hero">
         <div class="eyebrow">So we stopped tuning the model</div>
         <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:26px;line-height:1.3;color:#bfa66a;max-width:900px;margin:0 auto 10px">
-          A slot machine isn't a model problem. So what was I actually building?
+          A slot machine isn't a model problem. So what were we actually building?
         </div>
         <div class="equation" style="color:#e6eef7">
           Agent <span class="op">=</span> Model <span class="op">+</span> <em>Harness</em>
@@ -1420,7 +1420,7 @@
       </div>
 
       <aside class="notes">
-        I'd been treating the slot machine as a model problem — reach for a bigger model, a bigger prompt, more sub-agents. But none of those were the issue. So I took a step back and asked what an agent actually is. Here's the two-word definition I landed on: an agent is the model plus the harness. Everything that isn't the model is the harness — and those three knobs I kept reaching for were all the model. The harness was everything around it, and that's where the leverage actually was.
+        We'd been treating the slot machine as a model problem — reach for a bigger model, a bigger prompt, more sub-agents. But none of those were the issue. So we took a step back and asked what an agent actually is. Here's the two-word definition we landed on: an agent is the model plus the harness. Everything that isn't the model is the harness — and those three knobs we kept reaching for were all the model. The harness was everything around it, and that's where the leverage actually was.
       </aside>
     </section>
 
@@ -1678,7 +1678,7 @@
       </div>
 
       <aside class="notes">
-        So v3 stopped asking nine sub-agents to reason their way to a structured answer. We kept the LLM where ambiguity was real: Discover maps how CPU is configured across instances in that repo, and Apply makes the surgical YAML edits. In the middle, Plan became pure code — a deterministic solver — so the core planner is now 100% repeatable. I still say only the core planner, not whole PR, and we'll come back to that caveat when we open the harness.
+        So v3 stopped asking nine sub-agents to reason their way to a structured answer. We kept the LLM where ambiguity was real: Discover maps how CPU is configured across instances in that repo, and Apply makes the surgical YAML edits. In the middle, Plan became pure code — a deterministic solver — so the core planner is now 100% repeatable. We still say only the core planner, not whole PR, and we'll come back to that caveat when we open the harness.
       </aside>
     </section>
 
@@ -2131,7 +2131,7 @@
       </div>
 
       <aside class="notes">
-        This became my favorite sentence from the whole project: the best AI agent I built was the one that knew when not to use AI. That was the structural fix: v3 still used LLMs, but only where ambiguity belonged, and the plan stopped drifting. Next, let's look at where that landed — the v3 architecture, end to end.
+        This became our favorite sentence from the whole project: the best AI agent we built was the one that knew when not to use AI. That was the structural fix: v3 still used LLMs, but only where ambiguity belonged, and the plan stopped drifting. Next, let's look at where that landed — the v3 architecture, end to end.
       </aside>
     </section>
 
