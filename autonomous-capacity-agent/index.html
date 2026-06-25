@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI in Production — Talks by Tuhin Kanti Sharma</title>
+<title>AI in Production — Tech Talk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Newsreader:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
@@ -28,7 +28,7 @@
     justify-content: center;
     padding: 48px 24px;
   }
-  main { max-width: 680px; width: 100%; }
+  main { max-width: 640px; width: 100%; }
   .eyebrow {
     font-family: "Geist", sans-serif;
     font-size: 12px;
@@ -54,22 +54,14 @@
     margin-bottom: 40px;
   }
   .rule { height: 1px; background: var(--rule); margin: 40px 0 24px; }
-  .lead {
+  .presenters {
     display: grid;
     gap: 6px;
     font-size: 14px;
     color: #28406b;
     margin-bottom: 40px;
   }
-  .lead b { font-weight: 700; color: var(--ink); }
-  .section-label {
-    font-family: "Geist Mono", monospace;
-    font-size: 11px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 14px;
-  }
+  .presenters b { font-weight: 700; color: var(--ink); }
   .decks { display: grid; gap: 14px; }
   a.deck {
     display: flex;
@@ -86,9 +78,9 @@
   a.deck:hover { transform: translateY(-1px); border-color: var(--clay); }
   a.deck.primary { background: var(--ink); color: #e6eef7; border-color: var(--ink); }
   a.deck.primary:hover { border-color: var(--clay); }
-  .deck-title { display: flex; flex-direction: column; gap: 3px; padding-right: 16px; }
+  .deck-title { display: flex; flex-direction: column; gap: 2px; }
   .deck-title .t { font-weight: 600; font-size: 16px; }
-  .deck-title .d { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .deck-title .d { font-size: 12px; color: var(--muted); }
   a.deck.primary .deck-title .d { color: #57a8ff; }
   .arrow { font-family: "Geist Mono", monospace; font-size: 14px; }
   footer {
@@ -102,22 +94,21 @@
 </head>
 <body>
 <main>
-  <div class="eyebrow">· AI in Production · Talks</div>
+  <div class="eyebrow">· Tech talk · 2026</div>
   <h1>AI in <em>Production</em></h1>
-  <div class="sub">Engineering talks on building AI agents that actually ship</div>
+  <div class="sub">How We Built an Autonomous Agent to Optimize <em>Millions in Capacity</em></div>
 
-  <div class="lead">
-    <div>by <b>Tuhin Kanti Sharma</b> · Principal Software Engineer, Development Experience · Salesforce</div>
+  <div class="presenters">
+    <div><b>Tuhin Kanti Sharma</b> · Principal Software Engineer, Development Experience · Salesforce</div>
   </div>
 
   <div class="rule"></div>
 
-  <div class="section-label">Talks</div>
   <div class="decks">
-    <a class="deck primary" href="autonomous-capacity-agent/slides/tech-talk-v1.html">
+    <a class="deck primary" href="slides/tech-talk-v1.html">
       <span class="deck-title">
-        <span class="t">How We Built an Autonomous Agent to Optimize Millions in Capacity at Salesforce</span>
-        <span class="d">From a bloated prompt to a deterministic harness — what worked, what failed, and the engineering patterns that made the agent reliable in production.</span>
+        <span class="t">v1 · Current</span>
+        <span class="d">AI in Production — how we built an autonomous agent to optimize millions in capacity</span>
       </span>
       <span class="arrow">→</span>
     </a>

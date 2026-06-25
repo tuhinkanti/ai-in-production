@@ -1,8 +1,16 @@
 # AI in Production
 
-**How We Built an Autonomous Agent to Optimize Millions in Capacity**
+Engineering talks on building AI agents that actually ship — by [Tuhin Kanti Sharma](https://www.linkedin.com/in/tuhin-kanti-sharma/), Principal Software Engineer, Development Experience.
 
-A tech talk by [Tuhin Kanti Sharma](https://www.linkedin.com/in/tuhin-kanti-sharma/) — Principal Software Engineer, Development Experience.
+**Live:** https://tuhinkanti.github.io/ai-in-production/
+
+Each talk lives in its own folder as a self-contained [reveal.js](https://revealjs.com/) deck. Press <kbd>S</kbd> in any deck to open speaker notes.
+
+## Talks
+
+### [How We Built an Autonomous Agent to Optimize Millions in Capacity at Salesforce](autonomous-capacity-agent/slides/tech-talk-v1.html)
+
+`autonomous-capacity-agent/`
 
 Analysis of a large Kubernetes fleet revealed that most containers ran at under 20% of their requested CPU — a significant share of cloud spend paying for compute nobody used. This talk walks through building an autonomous AI agent that right-sizes Helm charts safely, at scale, across thousands of repositories: what worked, what failed, and the engineering patterns that made the agent reliable in production.
 
@@ -14,18 +22,12 @@ The arc:
 4. **Two kinds of work** — reasoning vs. structured computation (and where ILP fits).
 5. **Context engineering** — iterating on the harness to a plan you can trust, the same plan every run.
 
-## View the deck
+## Running locally
 
-The slides are a self-contained [reveal.js](https://revealjs.com/) deck.
-
-- **Live:** published via GitHub Pages — see the repository's Pages URL.
-- **Locally:**
-  ```bash
-  python3 -m http.server 8000
-  # then open http://localhost:8000/slides/tech-talk-v1.html
-  ```
-
-Press <kbd>S</kbd> in the deck to open speaker notes.
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000/
+```
 
 ## Links
 
