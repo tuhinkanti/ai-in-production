@@ -35,4 +35,4 @@ Press <kbd>S</kbd> in the deck to open speaker notes.
 
 ## License
 
-Talk content © Tuhin Kanti Sharma. The views expressed are the author's own.
+Licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Tuhin Kanti Sharma. The views expressed are the author's own.
