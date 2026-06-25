@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI in Production — Tech Talk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Newsreader:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #cfe9fe;
+    --ink: #001e5b;
+    --muted: #5e7ba2;
+    --clay: #0f7aff;
+    --rule: #a9c8e6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+  main { max-width: 640px; width: 100%; }
+  .eyebrow {
+    font-family: "Geist", sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    text-transform: uppercase;
+    color: var(--clay);
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-family: "Newsreader", serif;
+    font-weight: 500;
+    font-size: 56px;
+    line-height: 1.05;
+    margin: 0 0 8px;
+  }
+  h1 em { font-style: italic; color: var(--clay); }
+  .sub {
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-size: 22px;
+    color: #34507e;
+    margin-bottom: 40px;
+  }
+  .rule { height: 1px; background: var(--rule); margin: 40px 0 24px; }
+  .presenters {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    color: #28406b;
+    margin-bottom: 40px;
+  }
+  .presenters b { font-weight: 700; color: var(--ink); }
+  .decks { display: grid; gap: 14px; }
+  a.deck {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: #ffffff;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    color: var(--ink);
+    text-decoration: none;
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  a.deck:hover { transform: translateY(-1px); border-color: var(--clay); }
+  a.deck.primary { background: var(--ink); color: #e6eef7; border-color: var(--ink); }
+  a.deck.primary:hover { border-color: var(--clay); }
+  .deck-title { display: flex; flex-direction: column; gap: 2px; }
+  .deck-title .t { font-weight: 600; font-size: 16px; }
+  .deck-title .d { font-size: 12px; color: var(--muted); }
+  a.deck.primary .deck-title .d { color: #57a8ff; }
+  .arrow { font-family: "Geist Mono", monospace; font-size: 14px; }
+  footer {
+    margin-top: 48px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: "Geist Mono", monospace;
+    letter-spacing: 1.4px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">· Tech talk · 2026</div>
+  <h1>AI in <em>Production</em></h1>
+  <div class="sub">How We Built an Autonomous Agent to Optimize <em>Millions in Capacity</em></div>
+
+  <div class="presenters">
+    <div><b>Tuhin Kanti Sharma</b> · Principal Software Engineer, Development Experience · Salesforce</div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="decks">
+    <a class="deck primary" href="slides/tech-talk-v1.html">
+      <span class="deck-title">
+        <span class="t">v1 · Current</span>
+        <span class="d">AI in Production — how we built an autonomous agent to optimize millions in capacity</span>
+      </span>
+      <span class="arrow">→</span>
+    </a>
+  </div>
+
+  <footer>2026</footer>
+</main>
+</body>
+</html>

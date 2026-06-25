@@ -1,0 +1,2398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>AI in Production: How We Built an Autonomous Agent to Optimize Millions in Capacity at Salesforce</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@300;400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════
+     TOKENS — Salesforce 2026 brand palette
+       paper / ink anchored to the uploaded SVG (#cfe9fe / #001e5b)
+       accents pulled from official swatches: Electric Blue, Orange, Teal
+  ═══════════════════════════════════════════════════════════════════════ */
+  :root{
+    --paper:#cfe9fe;        /* SVG sky · ≈ Indigo 90 (#c4e3ff) */
+    --paper-2:#b5d9f5;
+    --paper-3:#e5f1fc;
+    --ink:#001e5b;          /* SVG navy · between Cloud Blue 20/30 */
+    --ink-2:#0a2a4f;
+    --ink-3:#1c4f8b;
+    --muted:#5e7ba2;
+    --rule:#a9c8e6;
+    --rule-soft:#cae0f4;
+    --clay:#0f7aff;         /* Electric Blue 60 · primary accent */
+    --clay-deep:#0540ff;    /* Electric Blue 30 */
+    --clay-soft:#57a8ff;    /* Electric Blue 70 */
+    --rust:#001e5b;
+    --mustard:#ff8c00;      /* Orange 70 · warm CTA accent */
+    --mustard-deep:#c85b00; /* Orange 50 */
+    --sage:#16d987;         /* Teal 60 · success / "good" */
+    --teal:#00aa77;         /* Teal 50 */
+    --navy:#001e5b;
+    --stage:#00173d;        /* Cloud Blue 20 · dark stage */
+    --stage-2:#001226;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     STAGE — fixed 1280×720 paper sheet, editorial feel
+  ═══════════════════════════════════════════════════════════════════════ */
+  html,body,.reveal{
+    background:var(--stage);
+    color:var(--ink);
+    font-family:"Geist",ui-sans-serif,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    font-feature-settings:"ss01","cv01","cv02";
+  }
+
+  .reveal .slides{text-align:initial}
+
+  .reveal .slides > section,
+  .reveal .slides > section > section{
+    width:1280px;height:720px;
+    padding:0 !important;
+    top:0 !important;left:0 !important;
+    margin:0 !important;
+    background:var(--paper);
+    color:var(--ink);
+    overflow:hidden;
+    display:block;
+    box-shadow:0 40px 80px -30px rgba(0,0,0,.55), 0 20px 40px -20px rgba(0,0,0,.35);
+  }
+
+  /* clean Salesforce sheet: subtle cool gradient, no fiber/noise */
+  .reveal .slides section.sheet::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(1200px 600px at 92% -10%, rgba(0,161,224,.10), transparent 60%),
+      radial-gradient(800px 400px at -10% 110%, rgba(3,46,97,.06), transparent 60%);
+  }
+  .reveal .slides section.sheet::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow: inset 0 0 0 1px rgba(3,46,97,.06), inset 0 0 80px rgba(3,46,97,.04);
+  }
+  .reveal .slides section.sheet > *{z-index:1}
+  .reveal .slides section.sheet > .bg-layer{position:absolute;inset:0;z-index:0}
+
+  /* Dark variant — hero / full-bleed moments, deep Salesforce navy */
+  .reveal .slides section.dark{
+    background:var(--stage);color:#e6eef7;
+  }
+  .reveal .slides section.dark::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(900px 600px at 20% 20%, rgba(0,161,224,.18), transparent 65%),
+      radial-gradient(700px 500px at 80% 80%, rgba(95,176,232,.10), transparent 60%);
+  }
+  .reveal .slides section.dark::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow: inset 0 0 0 1px rgba(207,225,244,.05), inset 0 0 140px rgba(0,0,0,.55);
+  }
+  .reveal .slides section.dark > *{z-index:1}
+
+  /* Full-image variant — uses the NotebookLM illustrations, bordered */
+  .reveal .slides section.plate{
+    background:var(--paper-3);
+  }
+  .reveal .slides section.plate::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow: inset 0 0 0 1px rgba(28,23,18,.06), inset 0 0 80px rgba(28,23,18,.05);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CHROME — editorial header strip
+  ═══════════════════════════════════════════════════════════════════════ */
+  .chrome{
+    position:absolute;top:28px;left:56px;right:56px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.24em;
+    font-weight:500;color:var(--ink-2);text-transform:uppercase;z-index:3;
+  }
+  .sheet  .chrome{color:var(--ink-2)}
+  .plate  .chrome{color:var(--ink-2)}
+  .dark   .chrome{color:#c9bfa4}
+  .chrome .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--clay);margin-right:10px;vertical-align:middle}
+  .chrome .folio{font-variant-numeric:tabular-nums}
+  .chrome .right{display:flex;gap:18px;align-items:center}
+
+  .sig{
+    position:absolute;left:56px;bottom:28px;
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:10px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--muted);z-index:3;
+  }
+  .sig.r{left:auto;right:56px;text-align:right}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SHARED TYPE
+  ═══════════════════════════════════════════════════════════════════════ */
+  .eyebrow{
+    font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.28em;font-size:11px;font-weight:500;color:var(--clay);
+  }
+  .eyebrow.mustard{color:var(--mustard-deep)}
+  .eyebrow.teal{color:var(--teal)}
+  h1,h2,h3,p{margin:0}
+
+  /* Reusable "serif italic" caption in the NotebookLM plate style */
+  .plate-cap{
+    font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:22px;line-height:1.3;color:var(--ink-2);text-align:center;letter-spacing:-.005em;
+  }
+  .plate-cap em{font-style:italic;color:var(--clay);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · COLD OPEN
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-cold{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    padding:96px 120px;text-align:center;}
+  .s-cold .eyebrow{margin-bottom:40px}
+  .s-cold .pair{display:flex;gap:140px;align-items:flex-end;margin-bottom:44px}
+  .s-cold .pair > div{display:flex;flex-direction:column;align-items:center}
+  .s-cold .num{font-weight:600;font-size:220px;line-height:.9;letter-spacing:-0.055em;color:var(--ink);
+    font-feature-settings:"tnum","ss01"}
+  .s-cold .label{margin-top:18px;font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.24em;font-size:11px;font-weight:500;color:var(--ink-2)}
+  .s-cold .caption{margin-top:24px;font-weight:500;font-size:32px;color:var(--ink);
+    letter-spacing:-0.022em;line-height:1.2}
+  .s-cold .caption em{color:var(--clay);font-style:normal;font-weight:600}
+  .hand-rule{display:block;width:340px;height:18px;margin:10px auto 0;color:var(--rule)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TITLE CARD
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-title{position:absolute;inset:0;box-sizing:border-box;
+    padding:140px 120px;display:flex;flex-direction:column;justify-content:center;gap:26px}
+  .s-title .eyebrow{margin-bottom:4px}
+  .s-title h1{font-weight:700;font-size:128px;line-height:.94;letter-spacing:-0.05em;color:var(--ink);max-width:1100px}
+  .s-title h1 em{color:var(--clay);font-style:normal;font-weight:800}
+  .s-title .sub{font-weight:500;font-size:28px;color:var(--ink-2);letter-spacing:-0.018em;margin-top:8px;max-width:960px;line-height:1.28}
+  .s-title .sub em{color:var(--clay);font-style:normal;font-weight:600}
+  .s-title .byline{display:flex;align-items:center;gap:22px;margin-top:36px;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+  .s-title .byline .bar{width:36px;height:2px;background:var(--clay)}
+  .s-title .byline b{color:var(--ink);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · HERO EQUATION / PULL
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-hero{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    padding:120px;text-align:center;gap:28px}
+  .s-hero .eyebrow{color:var(--mustard);margin-bottom:24px}
+  .dark .s-hero .eyebrow{color:var(--mustard)}
+  .s-hero .equation{font-weight:600;font-size:108px;line-height:1;letter-spacing:-0.04em}
+  .s-hero .equation em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-hero .equation .op{color:var(--muted);font-weight:400;margin:0 22px}
+  .dark .s-hero .equation .op{color:#5e7ba2}
+  .s-hero .note{margin-top:18px;font-family:"Geist Mono",ui-monospace,monospace;font-size:12.5px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · PULL QUOTE
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-quote{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:18px}
+  .s-quote .mark{font-family:"Newsreader",serif;font-size:170px;line-height:.7;color:var(--clay);letter-spacing:-0.05em;font-weight:600;opacity:.28;margin-bottom:-10px}
+  .s-quote blockquote{margin:0;font-weight:500;font-size:64px;line-height:1.08;letter-spacing:-0.032em;color:var(--ink);max-width:1080px}
+  .dark .s-quote blockquote{color:#e6eef7}
+  .s-quote blockquote em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-quote .attrib{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-top:14px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · BIG TEXT (bold declarative)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-big{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;padding:120px 160px;gap:28px}
+  .s-big .eyebrow{margin-bottom:6px}
+  .s-big .line{font-weight:600;font-size:68px;line-height:1.08;letter-spacing:-0.035em;color:var(--ink);max-width:1060px}
+  .dark .s-big .line{color:#e6eef7}
+  .s-big .line em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-big .rule{width:72px;height:3px;background:var(--clay)}
+  .s-big .note{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-top:12px;max-width:900px;line-height:1.7}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · HERO STAT
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-stat{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;padding:120px;text-align:center;gap:22px}
+  .s-stat .eyebrow{color:var(--mustard-deep);margin-bottom:10px}
+  .s-stat .big{font-weight:700;font-size:240px;line-height:.9;letter-spacing:-0.055em;color:var(--clay);
+    font-feature-settings:"tnum","ss01"}
+  .s-stat .legend{font-weight:500;font-size:28px;color:var(--ink);max-width:960px;letter-spacing:-0.018em;line-height:1.3}
+  .s-stat .legend b{color:var(--ink);font-weight:600}
+  .s-stat .source{margin-top:18px;font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · LIST (promises, numbered)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-list{position:absolute;inset:0;box-sizing:border-box;
+    padding:120px 120px 96px;display:flex;flex-direction:column;justify-content:center;gap:32px}
+  .s-list .head{display:flex;align-items:baseline;gap:18px}
+  .s-list h2{font-weight:600;font-size:44px;letter-spacing:-0.028em;line-height:1.1}
+  .s-list h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-list ol{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:22px;counter-reset:promise}
+  .s-list li{counter-increment:promise;display:grid;grid-template-columns:64px 1fr;gap:24px;align-items:baseline}
+  .s-list li::before{
+    content:"0" counter(promise);
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;font-weight:600;
+    color:var(--clay);letter-spacing:.1em;padding-top:4px;
+    border-top:1.5px solid var(--clay);width:44px;
+  }
+  .s-list li p{font-size:21px;line-height:1.4;color:var(--ink-2);font-weight:400;letter-spacing:-0.012em;max-width:900px}
+  .s-list li p b{color:var(--ink);font-weight:600}
+  .s-list li p em{color:var(--clay);font-style:normal;font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · DIAGRAM (title + svg canvas + footline)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-diagram{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 88px 64px;display:flex;flex-direction:column;gap:20px}
+  .s-diagram .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-diagram .top .eyebrow{margin-bottom:10px}
+  .s-diagram h2{font-weight:600;font-size:40px;line-height:1.1;letter-spacing:-0.028em;color:var(--ink);max-width:880px}
+  .s-diagram h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-diagram .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .s-diagram .canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;width:100%}
+  .s-diagram .canvas svg{width:100%;height:auto;max-height:460px;flex:1 1 auto}
+  .s-diagram .footline{text-align:center;font-weight:500;font-size:21px;color:var(--ink);letter-spacing:-0.018em}
+  .s-diagram .footline em{font-style:normal;color:var(--clay);font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · PLATE (NotebookLM illustration, centered with caption)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-plate{position:absolute;inset:0;box-sizing:border-box;
+    padding:76px 88px 60px;display:flex;flex-direction:column;gap:16px}
+  .s-plate .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-plate .top .eyebrow{margin-bottom:8px}
+  .s-plate h2{font-weight:600;font-size:32px;line-height:1.15;letter-spacing:-0.022em;color:var(--ink);max-width:900px}
+  .s-plate h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-plate .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .s-plate .plate-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;
+    background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:10px;position:relative}
+  .s-plate .plate-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 0 1px rgba(28,23,18,.04), inset 0 0 40px rgba(28,23,18,.04);border-radius:6px}
+  .s-plate .plate-wrap img{max-width:100%;max-height:100%;display:block;object-fit:contain;
+    filter:contrast(1.02) saturate(1.02)}
+  .s-plate .footline{text-align:center;font-weight:500;font-size:20px;color:var(--ink-2);letter-spacing:-0.018em;padding:0 40px}
+  .s-plate .footline em{font-style:normal;color:var(--clay);font-weight:700}
+
+  /* Plate without outer title — full-bleed illustration with only caption */
+  .s-plate-full{position:absolute;inset:0;box-sizing:border-box;
+    padding:64px 72px 54px;display:flex;flex-direction:column;gap:14px}
+  .s-plate-full .plate-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;
+    background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:16px;position:relative}
+  .s-plate-full .plate-wrap img{max-width:100%;max-height:100%;display:block;object-fit:contain}
+  .s-plate-full .plate-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 0 1px rgba(28,23,18,.04), inset 0 0 40px rgba(28,23,18,.04);border-radius:6px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TWO-COLUMN SPLIT (30% / 70%)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-split{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 72px 72px;display:flex;flex-direction:column;gap:24px}
+  .s-split .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-split h2{font-weight:600;font-size:36px;line-height:1.1;letter-spacing:-0.028em;color:var(--ink);max-width:900px}
+  .s-split h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-split .grid{flex:1;display:grid;grid-template-columns:1fr 1.4fr;gap:0;border-top:1px solid var(--rule);min-height:0}
+  .s-split .col{padding:28px 32px 0;display:flex;flex-direction:column;gap:14px;min-width:0}
+  .s-split .col + .col{border-left:1px solid var(--rule)}
+  .s-split .col .pct{font-weight:700;font-size:118px;line-height:.9;letter-spacing:-0.05em;color:var(--ink);font-feature-settings:"tnum"}
+  .s-split .col.warm .pct{color:var(--sage)}
+  .s-split .col.hot  .pct{color:var(--clay)}
+  .s-split .col .tag{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.22em;
+    font-size:11px;font-weight:600;color:var(--ink)}
+  .s-split .col .note{font-size:16px;line-height:1.5;color:var(--ink-2);max-width:520px}
+  .s-split .col .art{margin-top:auto;height:170px;display:flex;align-items:flex-end}
+  .s-split .col .art svg{width:100%;height:100%}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · COMPARE (two cards side-by-side)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-compare{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 88px 64px;display:flex;flex-direction:column;gap:22px}
+  .s-compare .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-compare h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;color:var(--ink)}
+  .s-compare h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-compare .grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:28px;min-height:0}
+  .card{
+    border:1px solid var(--rule);border-radius:12px;padding:28px 30px;background:rgba(255,252,240,.42);
+    display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden;
+  }
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--clay)}
+  .card.b::before{background:var(--teal)}
+  .card .kicker{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.22em;
+    font-size:11px;font-weight:600;color:var(--ink)}
+  .card h3{font-weight:600;font-size:30px;letter-spacing:-0.02em;color:var(--ink);line-height:1.1}
+  .card p{font-size:16.5px;line-height:1.55;color:var(--ink-2);max-width:520px}
+  .card ul{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .card li{padding-left:18px;position:relative;font-size:15.5px;color:var(--ink-2);line-height:1.45}
+  .card li::before{content:"";position:absolute;left:0;top:10px;width:8px;height:2px;background:var(--clay)}
+  .card.b li::before{background:var(--teal)}
+  .card .icon{align-self:flex-start;margin-bottom:-2px}
+  .card .foot{margin-top:auto;padding-top:14px;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.24em;text-transform:uppercase;font-weight:600}
+  .card .foot.clay{color:var(--clay)}
+  .card .foot.teal{color:var(--teal)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · CAUSES (two-bullet)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-causes{position:absolute;inset:0;box-sizing:border-box;
+    padding:120px 120px 96px;display:flex;flex-direction:column;justify-content:center;gap:32px}
+  .s-causes h2{font-weight:600;font-size:36px;line-height:1.14;letter-spacing:-0.028em;color:var(--ink);max-width:920px}
+  .s-causes h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-causes .items{display:flex;flex-direction:column;gap:22px;margin-top:6px}
+  .cause{display:grid;grid-template-columns:64px 1fr auto;gap:24px;align-items:center;
+    padding:26px 28px;border:1px solid var(--rule);border-radius:10px;background:rgba(255,252,240,.4)}
+  .cause .n{font-family:"Geist Mono",ui-monospace,monospace;font-size:14px;font-weight:600;color:var(--clay);letter-spacing:.1em}
+  .cause .t{font-weight:500;font-size:26px;letter-spacing:-0.02em;color:var(--ink);line-height:1.25}
+  .cause .t em{font-style:normal;color:var(--clay);font-weight:700}
+  .cause .pin{font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);padding:6px 12px;border:1px solid var(--rule);border-radius:999px}
+  .cause.dim{opacity:.5}
+  .cause.dim .pin{border-color:var(--muted);color:var(--muted)}
+  .cause.lit{border-color:var(--clay);background:rgba(194,90,58,.06)}
+  .cause.lit .pin{border-color:var(--clay);color:var(--clay)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TILES (five pillars navigation)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-tiles{position:absolute;inset:0;box-sizing:border-box;
+    padding:96px 72px;display:flex;flex-direction:column;justify-content:center;gap:36px}
+  .s-tiles .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-tiles h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:1000px;color:var(--ink)}
+  .s-tiles h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .tile-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+  .tile{border:1px solid var(--rule);border-radius:12px;padding:22px 20px 20px;background:rgba(255,252,240,.4);
+    display:flex;flex-direction:column;gap:10px;min-height:224px;position:relative;overflow:hidden;transition:all .25s}
+  .tile .tile-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:flex-start;color:var(--muted)}
+  .tile .tile-tag{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.22em;
+    font-size:10.5px;font-weight:600;color:var(--muted)}
+  .tile .tile-title{font-weight:600;font-size:22px;letter-spacing:-0.018em;color:var(--ink-2);line-height:1.15;margin-top:auto}
+  .tile .tile-desc{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .tile.lit{background:rgba(194,90,58,.07);border-color:var(--clay)}
+  .tile.lit .tile-icon{color:var(--clay)}
+  .tile.lit .tile-tag{color:var(--clay)}
+  .tile.lit .tile-title{color:var(--ink)}
+  .tile.lit .tile-desc{color:var(--ink-2)}
+  .tile .tile-n{position:absolute;top:16px;right:18px;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.16em;color:var(--muted);font-weight:600}
+  .tile.lit .tile-n{color:var(--clay)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TABLES
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-table{position:absolute;inset:0;box-sizing:border-box;padding:84px 96px 72px;
+    display:flex;flex-direction:column;gap:20px}
+  .s-table .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-table h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:900px;color:var(--ink)}
+  .s-table h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-table .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .tbl{display:grid;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .tbl .row{display:grid;padding:18px 0;border-bottom:1px solid rgba(201,191,164,.45)}
+  .tbl .row:last-child{border-bottom:none}
+  .tbl .row.head{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);font-weight:600}
+  .tbl.c3 .row{grid-template-columns:1.4fr 1fr 1fr;gap:32px}
+  .tbl.c2 .row{grid-template-columns:1.2fr 1fr;gap:40px}
+  .tbl .cell{font-size:17px;line-height:1.35;color:var(--ink-2);align-self:center}
+  .tbl .cell.k{color:var(--ink);font-weight:500}
+  .tbl .cell em{font-style:normal;color:var(--clay);font-weight:700}
+  .tbl .cell .good{color:var(--sage);font-weight:600}
+  .tbl .cell .bad{color:var(--clay);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · FILE TREE
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-tree{position:absolute;inset:0;box-sizing:border-box;padding:84px 96px 72px;
+    display:flex;flex-direction:column;gap:28px}
+  .s-tree .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-tree h2{font-weight:600;font-size:34px;letter-spacing:-0.028em;line-height:1.1;max-width:960px;color:var(--ink)}
+  .s-tree h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-tree .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .tree-box{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;gap:40px}
+  .tree{font-family:"Geist Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.65;
+    color:var(--ink-2);background:rgba(255,252,240,.46);border:1px solid var(--rule);border-radius:10px;
+    padding:22px 30px 24px;min-width:540px;position:relative}
+  .tree .hdr{position:absolute;top:-11px;left:24px;background:var(--paper);padding:0 10px;
+    font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .tree .dir{color:var(--clay);font-weight:600}
+  .tree .file{color:var(--ink-2)}
+  .tree .muted{color:var(--muted)}
+  .tree .hl{background:rgba(217,164,65,.2);padding:0 4px;border-radius:2px}
+  .tree-side{display:flex;flex-direction:column;gap:22px;max-width:300px}
+  .tree-side .item{font-size:14.5px;line-height:1.55;color:var(--ink-2)}
+  .tree-side .item b{color:var(--ink);font-weight:600;display:block;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);margin-bottom:4px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · FOUR GRID (hooks)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-four{position:absolute;inset:0;box-sizing:border-box;padding:84px 72px 72px;
+    display:flex;flex-direction:column;gap:22px}
+  .s-four .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-four h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:920px;color:var(--ink)}
+  .s-four h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-four .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .four-grid{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;min-height:0}
+  .four-grid .cell{border:1px solid var(--rule);border-radius:12px;padding:24px 22px;
+    background:rgba(255,252,240,.4);display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden}
+  .four-grid .cell::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--clay)}
+  .four-grid .cell .word{font-weight:600;font-size:30px;letter-spacing:-0.02em;color:var(--ink);line-height:1}
+  .four-grid .cell .desc{font-size:14px;color:var(--ink-2);line-height:1.5}
+  .four-grid .cell .ex{margin-top:auto;font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
+    letter-spacing:.12em;color:var(--rust);background:rgba(194,90,58,.08);padding:6px 10px;border-radius:4px;line-height:1.3}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · THREE-ROW (context mitigations)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .three-row{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .three-row .cell{border:1px solid var(--rule);border-radius:12px;padding:28px;background:rgba(255,252,240,.4);
+    display:flex;flex-direction:column;gap:14px;min-height:260px}
+  .three-row .cell .tile-icon{width:52px;height:52px;display:flex;align-items:center;color:var(--clay)}
+  .three-row .cell .tile-tag{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.22em;font-size:11px;font-weight:600;color:var(--clay)}
+  .three-row .cell h3{font-weight:600;font-size:24px;letter-spacing:-0.018em;color:var(--ink);margin-top:auto}
+  .three-row .cell p{font-size:14px;color:var(--ink-2);line-height:1.55}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · CHECKLIST
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-check{position:absolute;inset:0;box-sizing:border-box;padding:84px 120px 72px;
+    display:flex;flex-direction:column;justify-content:center;gap:20px}
+  .s-check .eyebrow{margin-bottom:0}
+  .s-check h2{font-weight:600;font-size:40px;letter-spacing:-0.028em;line-height:1.1;max-width:900px;color:var(--ink)}
+  .s-check h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-check ol{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-direction:column;gap:8px;counter-reset:c}
+  .s-check li{counter-increment:c;display:grid;grid-template-columns:52px 1fr;gap:22px;align-items:baseline;
+    padding:16px 0;border-bottom:1px solid rgba(201,191,164,.4)}
+  .s-check li:last-child{border-bottom:none}
+  .s-check li::before{content:"0" counter(c);font-family:"Geist Mono",ui-monospace,monospace;font-weight:600;
+    font-size:14px;color:var(--clay);letter-spacing:.1em}
+  .s-check li p{font-weight:500;font-size:22px;line-height:1.3;letter-spacing:-0.016em;color:var(--ink);max-width:900px}
+  .s-check li p em{font-style:normal;color:var(--clay);font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · ANTI-PATTERN CARD
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-ap{position:absolute;inset:0;box-sizing:border-box;padding:84px 96px 72px;
+    display:flex;flex-direction:column;gap:24px}
+  .s-ap .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-ap .ap-n{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--clay);font-weight:600;margin-bottom:10px}
+  .s-ap h2{font-weight:600;font-size:52px;letter-spacing:-0.032em;line-height:1.05;color:var(--ink);max-width:1000px}
+  .s-ap h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-ap .body{flex:1;display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:center;min-height:0}
+  .s-ap .body p{font-size:19px;line-height:1.55;color:var(--ink-2);max-width:660px}
+  .s-ap .body p + p{margin-top:14px}
+  .s-ap .body p b{color:var(--ink);font-weight:600}
+  .s-ap .body p em{font-style:normal;color:var(--clay);font-weight:600}
+  .s-ap .art{display:flex;align-items:center;justify-content:center}
+  .s-ap .art svg{width:100%;max-width:360px;height:auto}
+  .s-ap .punch{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--clay);font-weight:600;
+    border-top:2px solid var(--clay);padding-top:14px;max-width:900px;line-height:1.7}
+  .s-ap .punch em{font-style:normal;color:var(--ink);font-weight:700}
+
+  /* Chapter opener (section-card) */
+  .s-chap{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;padding:120px;gap:26px}
+  .s-chap .num{font-family:"Geist Mono",ui-monospace,monospace;font-size:120px;line-height:.9;
+    letter-spacing:-0.04em;font-weight:700;color:var(--clay);font-feature-settings:"tnum"}
+  .s-chap .kicker{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;letter-spacing:.3em;
+    text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:-8px}
+  .s-chap h2{font-weight:600;font-size:84px;letter-spacing:-0.038em;line-height:1;color:var(--ink);max-width:1040px}
+  .s-chap h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-chap .sub{margin-top:16px;font-size:22px;color:var(--ink-2);max-width:800px;line-height:1.4;letter-spacing:-0.012em}
+  .s-chap .sub em{font-style:normal;color:var(--clay);font-weight:600}
+  .dark .s-chap h2{color:#e6eef7}
+  .dark .s-chap .sub{color:#c9bfa4}
+  .dark .s-chap .kicker{color:#5e7ba2}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · STACK (two AGENTS.md)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-stack{position:absolute;inset:0;box-sizing:border-box;padding:84px 80px 64px;
+    display:flex;flex-direction:column;gap:22px}
+  .s-stack .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-stack h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:900px;color:var(--ink)}
+  .s-stack h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-stack .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .md-pair{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:28px;min-height:0}
+  .md-card{border:1px solid var(--rule);border-radius:12px;padding:22px 26px;
+    background:rgba(255,252,240,.4);display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+  .md-card .head{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+  .md-card .head h3{font-weight:600;font-size:17px;color:var(--ink)}
+  .md-card .head .tag{font-family:"Geist Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--muted);font-weight:600}
+  .md-card.bad .head .tag{color:var(--clay);font-weight:700}
+  .md-card.good .head .tag{color:var(--sage);font-weight:700}
+  .md-card .body{flex:1;overflow:hidden;font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;line-height:1.8;color:var(--ink-3)}
+  .md-card.bad .body p{opacity:.85;position:relative}
+  .md-card.bad .body p::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(194,90,58,.55)}
+  .md-card .body .cmt{color:var(--muted);font-style:italic}
+  .md-card .body .hl{color:var(--clay);font-weight:600}
+  .md-card.good .body p{padding:3px 0}
+  .md-card .foot{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--muted);padding-top:10px;border-top:1px solid var(--rule)}
+  .md-card.bad .foot{color:var(--clay);font-weight:600}
+  .md-card.good .foot{color:var(--sage);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · STAT INLINE (small, 1-liner)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-inline{position:absolute;inset:0;box-sizing:border-box;padding:120px 160px;
+    display:flex;flex-direction:column;justify-content:center;gap:22px}
+  .s-inline .eyebrow{margin-bottom:6px}
+  .s-inline .line{font-weight:500;font-size:40px;line-height:1.2;letter-spacing:-0.026em;color:var(--ink);max-width:1040px}
+  .s-inline .line b{color:var(--ink);font-weight:700}
+  .s-inline .line em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-inline .src{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);margin-top:12px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     FRAGMENTS
+  ═══════════════════════════════════════════════════════════════════════ */
+  .reveal .fragment{opacity:0;transform:none;transition:opacity .5s ease-out, transform .5s ease-out}
+  .reveal .fragment.visible{opacity:1}
+  .reveal .fragment.rise{transform:translateY(10px)}
+  .reveal .fragment.rise.visible{transform:translateY(0)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     REVEAL CONTROLS
+  ═══════════════════════════════════════════════════════════════════════ */
+  .reveal .controls{
+    color:var(--ink);
+    z-index:10000 !important;
+    pointer-events:auto !important;
+  }
+  .reveal .controls button{pointer-events:auto !important}
+  .reveal .progress{color:var(--clay);background:rgba(217,207,181,.15)}
+  .reveal .slide-number{background:transparent;color:#d9cfb5;font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.18em}
+
+  /* ─── Salesforce-style bio / handoff slide ─────────────────────────────── */
+  .reveal .slides section.bio{
+    background:#cfe9fe !important;
+    color:#032e61;
+    overflow:hidden;
+  }
+  .reveal .slides section.bio::before,
+  .reveal .slides section.bio::after{display:none}
+  .reveal .slides section.bio .bio-stage{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family:"Geist",sans-serif;
+    color:#0a2a4f;
+    pointer-events:none;
+  }
+  .reveal .slides section.bio .sf-cloud{
+    position:absolute; top:36px; right:48px; width:96px; height:auto; display:block;
+    z-index:2; pointer-events:none;
+  }
+  .reveal .slides section.bio .sparkles{
+    position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+    z-index:1;
+  }
+  .reveal .slides section.bio .bio-stage{ z-index:3 }
+  .reveal .slides section.bio .avatar{
+    width:300px; height:300px; border-radius:50%;
+    background:#a9c5e3;
+    box-shadow:0 12px 32px rgba(3,46,97,.18);
+    overflow:hidden; position:relative; margin-top:-32px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reveal .slides section.bio .avatar img{
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .reveal .slides section.bio .avatar .initials{
+    font-family:"Geist",sans-serif; font-weight:700;
+    font-size:88px; letter-spacing:-2px; color:#cfe9fe;
+    background:linear-gradient(135deg,#1c4f8b 0%,#2d6cb6 100%);
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reveal .slides section.bio .name{
+    margin-top:48px; text-align:center;
+    font-weight:700; font-size:54px; letter-spacing:-1px;
+    color:#0a2a4f;
+  }
+  .reveal .slides section.bio .role{
+    margin-top:8px; text-align:center;
+    font-weight:400; font-size:30px; line-height:1.25;
+    color:#1c4f8b;
+  }
+
+  /* ─── Side-by-side "about me" variant ─────────────────────────────────── */
+  .reveal .slides section.bio.about{
+    color:#0a2a4f;
+  }
+  .reveal .slides section.bio.about .bio-stage{
+    flex-direction:row; gap:80px;
+    align-items:center; justify-content:center;
+    padding:0 120px;
+  }
+  .reveal .slides section.bio.about .avatar{
+    width:340px; height:340px; flex:0 0 340px; margin-top:0;
+    display:block; position:relative; overflow:hidden; border-radius:50%;
+  }
+  .reveal .slides section.bio.about .avatar img{
+    position:absolute; inset:0;
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .reveal .slides section.bio.about .about-copy{
+    flex:1 1 auto; max-width:540px;
+    display:flex; flex-direction:column; gap:14px;
+    color:#0a2a4f; text-align:left;
+  }
+  .reveal .slides section.bio.about .about-copy .eyebrow{
+    font-family:"Geist Mono",monospace;
+    font-size:13px; font-weight:700; letter-spacing:3.6px;
+    color:#0f7aff; text-transform:uppercase; margin-bottom:4px;
+  }
+  .reveal .slides section.bio.about .about-copy .name{
+    margin:0; text-align:left;
+    font-size:46px; line-height:1.05; letter-spacing:-1.2px;
+    font-weight:700; color:#001e5b;
+  }
+  .reveal .slides section.bio.about .about-copy .role{
+    margin:0 0 8px; text-align:left;
+    font-size:22px; line-height:1.3; font-weight:500;
+    color:#1c4f8b;
+  }
+  .reveal .slides section.bio.about .about-copy ul{
+    list-style:none; padding:0; margin:8px 0 0;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .reveal .slides section.bio.about .about-copy li{
+    position:relative; padding-left:26px;
+    font-size:20px; line-height:1.4; color:#0a2a4f;
+  }
+  .reveal .slides section.bio.about .about-copy li::before{
+    content:"·"; position:absolute; left:8px; top:-3px;
+    font-family:"Geist Mono",monospace; font-weight:700;
+    font-size:24px; color:#0f7aff;
+  }
+  .reveal .slides section.bio .handoff-eyebrow{
+    position:absolute; top:140px; left:0; right:0;
+    text-align:center;
+    font-family:"Geist Mono",monospace;
+    font-size:13px; font-weight:700; letter-spacing:3.6px;
+    color:#0f7aff;
+    text-transform:uppercase;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · MOTHERBOARD (chip + zones)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-board{position:absolute;inset:0;box-sizing:border-box;
+    padding:64px 72px 56px;display:flex;flex-direction:column;gap:18px}
+  .s-board .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-board h2{font-weight:600;font-size:42px;line-height:1.08;letter-spacing:-0.028em;color:var(--ink);max-width:820px}
+  .s-board h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-board .eyebrow{margin-bottom:14px}
+  .s-board .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .board-wrap{flex:1;display:grid;grid-template-columns:160px 1fr 160px;align-items:center;gap:14px;margin-top:4px;min-height:0}
+  .side-labels{display:flex;flex-direction:column;gap:48px}
+  .side-labels.right{align-items:flex-start}
+  .side-labels.left{align-items:flex-end;text-align:right}
+  .label-block{font-size:13.5px;line-height:1.4;color:var(--ink-2);max-width:160px;font-weight:400}
+  .label-block .tag{display:block;font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.18em;font-size:10.5px;color:var(--clay);font-weight:700;margin-bottom:5px}
+  .label-block .txt{color:var(--ink-2);font-size:13.5px;font-weight:400;letter-spacing:-0.005em}
+  .board-svg{width:100%;height:100%;max-height:420px}
+  .s-board .footline{text-align:center;font-weight:500;font-size:22px;color:var(--ink);letter-spacing:-0.018em}
+  .s-board .footline em{color:var(--clay);font-style:normal;font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TWO-COLUMN HERO (poet doing taxes etc.)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-figure{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 96px 64px;display:flex;flex-direction:column;gap:22px}
+  .s-figure .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-figure h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;color:var(--ink);max-width:880px}
+  .s-figure h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-figure .body{flex:1;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;min-height:0}
+  .s-figure .art{display:flex;align-items:center;justify-content:center}
+  .s-figure .art svg{width:100%;height:100%;max-height:440px}
+  .s-figure .art img{width:100%;height:100%;max-height:440px;object-fit:contain}
+  .s-figure .copy p{font-size:21px;line-height:1.5;color:var(--ink-2);margin:0 0 14px;max-width:580px}
+  .s-figure .copy p b{color:var(--ink);font-weight:600}
+  .s-figure .copy p em{font-style:normal;color:var(--clay);font-weight:600}
+  .s-figure .copy .punch{font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:34px;line-height:1.2;color:var(--ink);letter-spacing:-.005em;max-width:520px}
+  .s-figure .copy .punch em{font-style:italic;color:var(--clay);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · PILLAR SPLIT (55 / 45) — used for Ch 6 zone walks
+     LEFT  = the beat: provocation, headline, body
+     RIGHT = the persistent agent canvas, evolving slide to slide
+  ═══════════════════════════════════════════════════════════════════════ */
+  .ps-shell{position:absolute;top:60px;left:56px;right:56px;bottom:36px;
+    display:grid;grid-template-columns:55fr 45fr;gap:36px;align-items:stretch;min-height:0;}
+  .ps-left{display:flex;flex-direction:column;gap:18px;padding-right:8px;min-width:0;justify-content:flex-start;}
+  .ps-right{display:flex;flex-direction:column;gap:10px;min-width:0;border-left:1px solid var(--rule);padding-left:32px}
+
+  .ps-eyebrow{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.28em;font-size:11px;font-weight:700;color:var(--clay);}
+  .ps-eyebrow.warn{color:var(--mustard-deep)}
+  .ps-eyebrow.calm{color:var(--teal)}
+  .ps-prompt{display:inline-flex;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;
+    background:rgba(255,140,0,.12);border:1px solid rgba(200,91,0,.35);
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--mustard-deep);font-weight:700;}
+  .ps-prompt::before{content:"●";color:var(--mustard);font-size:9px;animation:ps-prompt-blink 1.6s ease-in-out infinite}
+  @keyframes ps-prompt-blink{0%,100%{opacity:.3}50%{opacity:1}}
+  .ps-headline{font-family:"Geist",sans-serif;font-weight:700;font-size:56px;line-height:1.02;
+    letter-spacing:-0.034em;color:var(--ink);}
+  .ps-headline em{font-style:normal;color:var(--clay);font-weight:800}
+  .ps-headline.warn em{color:var(--mustard-deep)}
+  .ps-sub{font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:22px;line-height:1.4;color:var(--ink-2);letter-spacing:-.005em;max-width:560px}
+  .ps-sub em{color:var(--clay);font-style:italic;font-weight:600}
+  .ps-body{font-family:"Geist",sans-serif;font-weight:500;font-size:18px;line-height:1.55;
+    color:var(--ink-2);letter-spacing:-.003em;max-width:580px}
+  .ps-body b{color:var(--ink);font-weight:600}
+  .ps-body em{color:var(--clay);font-style:normal;font-weight:600}
+
+  .ps-canvas-cap{font-family:"Geist Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:baseline;
+    justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+  .ps-canvas-cap .step{color:var(--clay)}
+  .ps-canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;
+    background:linear-gradient(180deg,#eaf3fc 0%, var(--paper-3) 100%);
+    border:1px solid var(--rule);border-radius:10px;padding:14px;}
+  .ps-canvas svg{width:100%;height:auto;max-height:100%}
+  .ps-canvas-foot{font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:14px;line-height:1.35;color:var(--ink-2);text-align:center;letter-spacing:-.003em;}
+  .ps-canvas-foot em{color:var(--clay);font-style:italic;font-weight:600}
+
+  /* Persistent canvas: pulse animations for context-zone halos */
+  @keyframes p1-ctx-pulse{
+    0%,100%{ stroke-opacity:.45; stroke-width:1.6 }
+    50%{ stroke-opacity:1; stroke-width:2.6 }
+  }
+  .p1-ctx-pulse{ animation:p1-ctx-pulse 2.4s ease-in-out infinite; transform-box:fill-box; transform-origin:center }
+  @keyframes p1-token-drift{
+    0%{ opacity:.15; transform:translateY(0) }
+    50%{ opacity:.85; transform:translateY(-2px) }
+    100%{ opacity:.15; transform:translateY(0) }
+  }
+  .p1-token-bloat rect{ animation:p1-token-drift 1.8s ease-in-out infinite }
+  .p1-token-bloat rect:nth-child(2){ animation-delay:.2s }
+  .p1-token-bloat rect:nth-child(3){ animation-delay:.4s }
+  .p1-token-bloat rect:nth-child(4){ animation-delay:.6s }
+  .p1-token-bloat rect:nth-child(5){ animation-delay:.8s }
+  .p1-token-bloat rect:nth-child(6){ animation-delay:1.0s }
+
+  /* Pillar pill that lands in a context zone */
+  .p1-pill-land{ animation:p1-pill-pop .9s ease-out both }
+  @keyframes p1-pill-pop{
+    0%{ opacity:0; transform:translateY(8px) scale(.92) }
+    70%{ opacity:1; transform:translateY(-1px) scale(1.02) }
+    100%{ opacity:1; transform:translateY(0) scale(1) }
+  }
+
+</style>
+</head>
+
+<body>
+
+<div class="reveal">
+  <div class="slides">
+
+
+    <!-- slide 01 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · TITLE</div>
+        <div class="right"><span>v8 · 2026</span><span class="folio">01</span></div>
+      </div>
+
+      <div class="s-title">
+        <div class="eyebrow">Tech talk · 2026</div>
+        <h1>AI in <em>Production</em></h1>
+        <div class="sub">How We Built an Autonomous Agent to Optimize <em>Millions in Capacity</em> at Salesforce</div>
+        <div class="byline">
+          <span class="bar"></span>
+          <span><b>Tuhin Kanti Sharma</b> · Principal Software Engineer, Development Experience</span>
+        </div>
+        <div style="margin-top:22px;display:flex;flex-direction:column;gap:9px;font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.01em">
+          <a href="https://www.linkedin.com/in/tuhin-kanti-sharma/" style="color:var(--clay);text-decoration:none;display:inline-flex;align-items:baseline;gap:10px">
+            <span style="flex:0 0 90px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700">LinkedIn</span><span>linkedin.com/in/tuhin-kanti-sharma</span>
+          </a>
+          <a href="https://engineering.salesforce.com/author/tuhin-sharma/" style="color:var(--clay);text-decoration:none;display:inline-flex;align-items:baseline;gap:10px">
+            <span style="flex:0 0 90px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700">Blog</span><span>engineering.salesforce.com/author/tuhin-sharma</span>
+          </a>
+          <div style="display:inline-flex;align-items:center;gap:14px">
+            <a href="https://www.linkedin.com/newsletters/swe-in-the-age-of-ai-7342972190482472960/" style="color:var(--clay);text-decoration:none;display:inline-flex;align-items:baseline;gap:10px">
+              <span style="flex:0 0 90px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700">Newsletter</span><span>linkedin.com/newsletters/swe-in-the-age-of-ai-7342972190482472960</span>
+            </a>
+            <span style="display:inline-flex;flex-direction:column;align-items:center;gap:5px">
+              <span style="background:#fff;padding:5px;border-radius:6px;line-height:0;box-shadow:0 1px 4px rgba(0,0,0,.15)">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" shape-rendering="crispEdges" width="78" height="78"><path fill="#ffffff" d="M0 0h45v45H0z"/><path stroke="#000000" d="M4 4.5h7m1 0h1m1 0h2m1 0h2m2 0h3m2 0h3m2 0h2m1 0h7M4 5.5h1m5 0h1m2 0h4m3 0h1m1 0h2m1 0h2m2 0h1m2 0h1m1 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m1 0h2m3 0h1m2 0h2m1 0h1m2 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m2 0h1m2 0h1m4 0h3m1 0h3m1 0h3m2 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m2 0h1m1 0h2m4 0h1m3 0h2m1 0h3m3 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m1 0h1m1 0h3m1 0h3m7 0h1m5 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M14 11.5h4m1 0h2m1 0h1m1 0h2m2 0h1m2 0h2M4 12.5h1m1 0h1m3 0h2m1 0h1m1 0h2m1 0h1m1 0h4m1 0h2m1 0h2m2 0h1m2 0h1m2 0h1m1 0h1M5 13.5h1m3 0h1m2 0h1m1 0h2m1 0h2m1 0h1m1 0h1m2 0h1m2 0h1m2 0h1m2 0h1m2 0h1m1 0h2M5 14.5h1m1 0h2m1 0h1m1 0h2m1 0h2m1 0h1m1 0h1m1 0h2m3 0h1m1 0h1m1 0h1m2 0h1m1 0h3m1 0h1M4 15.5h1m4 0h1m9 0h2m6 0h2m1 0h1m2 0h3m1 0h1M4 16.5h1m1 0h2m2 0h1m2 0h1m1 0h3m2 0h1m2 0h1m3 0h2m3 0h1m1 0h1m2 0h1m2 0h1M4 17.5h2m1 0h1m4 0h2m2 0h9m2 0h3m1 0h5m1 0h1m1 0h2M4 18.5h1m3 0h5m1 0h2m1 0h3m3 0h5m3 0h1m5 0h2m1 0h1M6 19.5h1m4 0h2m1 0h3m1 0h1m1 0h2m2 0h1m2 0h3m3 0h1m1 0h3m1 0h1M5 20.5h2m2 0h2m2 0h4m1 0h1m2 0h1m1 0h2m1 0h1m2 0h1m2 0h1m1 0h2M5 21.5h1m2 0h1m2 0h1m2 0h1m1 0h1m7 0h1m1 0h3m1 0h3m1 0h2m2 0h3M9 22.5h2m2 0h1m2 0h2m1 0h1m2 0h1m1 0h2m2 0h2m1 0h1m2 0h1m2 0h2m1 0h1M4 23.5h3m1 0h1m2 0h2m1 0h1m1 0h1m1 0h1m3 0h3m1 0h1m6 0h3m1 0h1M5 24.5h1m2 0h1m1 0h3m1 0h1m1 0h2m1 0h2m1 0h1m4 0h2m2 0h2m1 0h2m1 0h1m1 0h1M4 25.5h2m2 0h2m1 0h1m1 0h1m2 0h1m1 0h2m3 0h2m1 0h4m1 0h4m5 0h1M5 26.5h3m2 0h1m3 0h2m3 0h1m1 0h3m1 0h1m1 0h1m3 0h2m4 0h4M4 27.5h1m4 0h1m1 0h1m2 0h5m1 0h1m1 0h1m1 0h4m4 0h6m2 0h1M4 28.5h1m1 0h1m2 0h3m3 0h1m1 0h7m1 0h5m2 0h1m1 0h2M5 29.5h2m2 0h1m1 0h1m1 0h1m2 0h2m2 0h3m5 0h2m1 0h2m1 0h2m1 0h1m2 0h1M4 30.5h4m2 0h1m1 0h3m5 0h1m2 0h1m4 0h4m2 0h1m1 0h1m1 0h1m1 0h1M7 31.5h1m7 0h2m1 0h3m1 0h1m3 0h1m3 0h1m1 0h3m5 0h1M4 32.5h2m1 0h2m1 0h2m1 0h2m3 0h1m1 0h1m2 0h2m2 0h2m3 0h6m1 0h1M12 33.5h1m2 0h2m1 0h7m1 0h4m2 0h1m3 0h1m3 0h1M4 34.5h7m1 0h1m1 0h1m2 0h1m1 0h1m3 0h6m1 0h1m1 0h1m1 0h1m1 0h1m3 0h1M4 35.5h1m5 0h1m2 0h1m1 0h2m1 0h4m2 0h1m2 0h2m2 0h2m3 0h1m2 0h1M4 36.5h1m1 0h3m1 0h1m2 0h1m2 0h2m1 0h1m1 0h1m2 0h3m2 0h1m1 0h6m2 0h1M4 37.5h1m1 0h3m1 0h1m2 0h2m1 0h2m6 0h1m2 0h1m1 0h1m2 0h1m3 0h5M4 38.5h1m1 0h3m1 0h1m1 0h3m1 0h1m1 0h2m2 0h1m1 0h1m1 0h1m6 0h1m1 0h2m1 0h3M4 39.5h1m5 0h1m7 0h1m3 0h3m1 0h1m1 0h1m3 0h2m2 0h2M4 40.5h7m1 0h1m2 0h5m4 0h1m3 0h1m1 0h4m1 0h1m1 0h1m2 0h1"/></svg>
+              </span>
+              <span style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700">Scan to subscribe</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sig">FIG. 00 · COVER</div>
+
+      <aside class="notes">
+        Hi, I'm Tuhin Sharma, a Principal Software Engineer. Today I'm going to walk you through how I built an autonomous agent to right-size compute capacity across thousands of repositories — what worked, what failed, and what I learned about building AI agents that actually ship in production.
+      </aside>
+    </section>
+
+    <!-- slide 02 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · ABOUT ME</div>
+        <div class="right"><span>About the speaker</span><span class="folio">02</span></div>
+      </div>
+
+      <div style="position:absolute;inset:96px 80px 80px;display:grid;grid-template-columns:380px 1fr;gap:72px;align-items:center">
+        <div style="width:380px;height:440px;border-radius:28px;overflow:hidden;background:#e5f1fc;border:1px solid var(--rule);box-shadow:0 16px 40px rgba(0,30,91,.14)">
+          <img src="../images/tuhin.jpg" alt="Tuhin Kanti Sharma" style="width:100%;height:100%;object-fit:cover;display:block"/>
+        </div>
+
+        <div style="max-width:650px">
+          <div class="eyebrow">About me</div>
+          <h2 style="font-family:Geist,sans-serif;font-size:58px;line-height:1.02;letter-spacing:-1.8px;margin:0 0 14px;color:var(--ink)">Tuhin Kanti Sharma</h2>
+          <div style="font-size:25px;line-height:1.3;color:var(--ink-3);margin-bottom:34px">Principal Software Engineer, Development Experience · Salesforce</div>
+
+          <ul style="padding-left:28px;margin:0;display:grid;gap:14px;font-size:22px;line-height:1.3;color:var(--ink-2)">
+            <li>DevX Architect focused on building a safe, AI-driven developer experience.</li>
+            <li>Currently building the Next Gen Feature Flags platform.</li>
+            <li>Previously built the release orchestration and synthetic monitoring platform.</li>
+            <li>Builds AI agents as a hobby, to automate common developer workflows.</li>
+            <li>External talks: DeveloperWeek 2026, CNCF gRPC Conf 2020, and UtahGeekEvents.</li>
+          </ul>
+        </div>
+      </div>
+
+      <aside class="notes">
+        Quick about-me. I'm Tuhin Kanti Sharma, a Principal Software Engineer in Development Experience at Salesforce — a DevX architect focused on building a safe, AI-driven developer experience. I'm currently building the Next Gen Feature Flags platform; previously I built the release orchestration and synthetic monitoring platform. I build AI agents as a hobby, to automate common developer workflows. I regularly do internal tech talks at Salesforce, and externally I've spoken at DeveloperWeek 2026, CNCF gRPC Conf 2020, and UtahGeekEvents.
+      </aside>
+    </section>
+
+    <!-- slide 03 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · AGENDA</div>
+        <div class="right"><span>What we will cover</span><span class="folio">03</span></div>
+      </div>
+
+      <div style="position:absolute;inset:112px 120px 90px;display:grid;grid-template-columns:0.9fr 1.1fr;gap:72px;align-items:center">
+        <div>
+          <div class="eyebrow">Agenda</div>
+          <h2 style="font-family:Geist,sans-serif;font-size:70px;line-height:1.02;letter-spacing:-2.4px;margin:0;color:var(--ink)">How I built an agent that <em style="color:var(--clay);font-style:normal">worked.</em></h2>
+        </div>
+
+        <ol style="list-style:none;counter-reset:agenda;padding:0;margin:0;display:grid;gap:14px">
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">01</span>
+            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">The capacity problem — Helm sprawl across thousands of repos</span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">02</span>
+            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">v1 &rarr; v2: where the prompt and sub-agents broke</span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">03</span>
+            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">The reframe: <em>Agent = Model + Harness</em></span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">04</span>
+            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">Two kinds of work: reasoning vs structured (ILP)</span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">05</span>
+            <span style="font-size:25px;line-height:1.22;color:var(--ink-2)">Context engineering &rarr; a plan I trust, every run</span>
+          </li>
+        </ol>
+      </div>
+
+      <aside class="notes">
+        Quick agenda. I'll start with the capacity problem — Helm charts sprawled across thousands of repositories. Then v1 versus v2 and where the prompt and sub-agent versions broke. Then the reframe — Agent equals Model plus Harness. Then two kinds of work: reasoning versus structured, and where ILP fits. I close with context engineering — how iterating on the harness took the agent to a plan I trust, the same plan every run.
+      </aside>
+    </section>
+
+    <!-- slide 04 -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">04</span></div>
+      </div>
+
+      <div class="s-chap">
+        <div class="kicker">Chapter one</div>
+        <div class="num">01</div>
+        <h2>The <em>Problem.</em></h2>
+        <div class="sub">Most of our fleet is idle. The "obvious" fix isn't obvious at all.</div>
+      </div>
+
+      <aside class="notes">
+        Chapter 1. Before we get to agents, let me set up the actual problem we were trying to solve. It's a boring infrastructure problem — but it turns out to be exactly the kind of problem AI agents are good at, and bad at, in interesting ways.
+      </aside>
+    </section>
+
+    <!-- slide 05 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>The fleet is idle</span><span class="folio">05</span></div>
+      </div>
+
+      <div class="s-stat">
+        <div class="eyebrow mustard">Across the Salesforce fleet</div>
+        <div class="big">86%</div>
+        <div class="legend">of containers were running at less than <b>20%</b> of their requested CPU.</div>
+        <div class="source">Translation · almost half our cloud bill was paying for compute nobody was using</div>
+      </div>
+
+      <aside class="notes">
+        Across our Kubernetes fleet, 86% of containers were running at less than 20% of their requested CPU. Translation — almost half our cloud bill paying for compute nobody used. The natural reaction was the obvious one.
+      </aside>
+    </section>
+
+    <!-- slide 06 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>The hook</span><span class="folio">06</span></div>
+      </div>
+
+      <div class="s-big" style="padding:140px 160px">
+        <div class="rule"></div>
+        <div class="eyebrow">The hidden question</div>
+        <div class="line">Right-size it <em>where?</em></div>
+        <div class="note">Before you can change the CPU, you have to know which config layer actually controls the request.</div>
+      </div>
+
+      <aside class="notes">
+        The obvious ask is just right-size the containers. The hidden question is: right-size it where? Before you can change the CPU, you have to know which config layer actually controls the request. That sets up the config sprawl map on the next slide.
+      </aside>
+    </section>
+
+    <!-- slide 07 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Config sprawl · all the options</span><span class="folio">07</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow">Helm charts · scattered across thousands of repositories</div>
+            <h2>Same value. <em>Six different homes.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <svg viewBox="0 0 1080 460" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <marker id="dotk" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4">
+                <circle cx="3" cy="3" r="2.2" fill="#0f7aff"/>
+              </marker>
+              <pattern id="hashk" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#c85b00" stroke-width="1" opacity=".5"/>
+              </pattern>
+            </defs>
+
+            <!-- faint orbit rings -->
+            <g fill="none" stroke="#c9bfa4" stroke-width="1" opacity=".55">
+              <ellipse cx="540" cy="230" rx="360" ry="170"/>
+              <ellipse cx="540" cy="230" rx="200" ry="95" stroke-dasharray="3 4" opacity=".8"/>
+            </g>
+
+            <!-- spokes from center to each node -->
+            <g stroke="#0f7aff" stroke-width="1.1" fill="none" opacity=".7" marker-end="url(#dotk)">
+              <line x1="540" y1="230" x2="160" y2="88"/>
+              <line x1="540" y1="230" x2="540" y2="58"/>
+              <line x1="540" y1="230" x2="920" y2="88"/>
+              <line x1="540" y1="230" x2="160" y2="390"/>
+              <line x1="540" y1="230" x2="540" y2="410"/>
+              <line x1="540" y1="230" x2="920" y2="390"/>
+            </g>
+
+            <!-- center · CPU knob -->
+            <g>
+              <circle cx="540" cy="230" r="64" fill="#1c1712"/>
+              <circle cx="540" cy="230" r="54" fill="none" stroke="#ff8c00" stroke-width="1.4"/>
+              <text x="540" y="232" text-anchor="middle" font-family="Geist,sans-serif" font-size="15" font-weight="700" fill="#e6eef7">CPU requests</text>
+              <text x="540" y="254" text-anchor="middle" font-family="Newsreader,serif" font-size="10.5" font-style="italic" fill="#5e7ba2">one conceptual knob</text>
+            </g>
+
+            <!-- NODE · SC overrides -->
+            <g transform="translate(20 40)">
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1"/>
+              <text x="14" y="22" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#0f7aff">· STRUCTURED CONFIG</text>
+              <text x="14" y="44" font-family="Geist Mono,monospace" font-size="12" font-weight="600" fill="#032e61">&lt;repo&gt;/config/helm/&lt;chart&gt;/</text>
+              <text x="14" y="60" font-family="Geist Mono,monospace" font-size="12" font-weight="600" fill="#032e61">  values.yaml  ·  defaults.yaml</text>
+              <text x="14" y="78" font-family="Newsreader,serif" font-size="12" font-style="italic" fill="#1c4f8b">structured config · highest precedence</text>
+            </g>
+
+            <!-- NODE · helm.tf (addon) -->
+            <g transform="translate(400 10)">
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1"/>
+              <text x="14" y="22" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#0f7aff">· HELM ADDON</text>
+              <text x="14" y="44" font-family="Geist Mono,monospace" font-size="12" font-weight="600" fill="#032e61">&lt;repo&gt;/addons/helm.tf</text>
+              <text x="14" y="60" font-family="Geist Mono,monospace" font-size="12" fill="#5e7ba2">helm_chart_values { cpu = ... }</text>
+              <text x="14" y="78" font-family="Newsreader,serif" font-size="12" font-style="italic" fill="#1c4f8b">infra addon block</text>
+            </g>
+
+            <!-- NODE · chart values.yaml -->
+            <g transform="translate(780 40)">
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1"/>
+              <text x="14" y="22" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#0f7aff">· CHART DEFAULTS</text>
+              <text x="14" y="44" font-family="Geist Mono,monospace" font-size="12" font-weight="600" fill="#032e61">&lt;chart&gt;/values.yaml</text>
+              <text x="14" y="60" font-family="Geist Mono,monospace" font-size="12" fill="#5e7ba2">cpu: "500m"</text>
+              <text x="14" y="78" font-family="Newsreader,serif" font-size="12" font-style="italic" fill="#1c4f8b">the "obvious" place</text>
+            </g>
+
+            <!-- NODE · env overrides -->
+            <g transform="translate(20 340)">
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1"/>
+              <text x="14" y="22" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#0f7aff">· ENV OVERRIDES</text>
+              <text x="14" y="44" font-family="Geist Mono,monospace" font-size="12" font-weight="600" fill="#032e61">values.dev.yaml · prod.yaml</text>
+              <text x="14" y="60" font-family="Geist Mono,monospace" font-size="12" fill="#5e7ba2">region/us-east.yaml · …</text>
+              <text x="14" y="78" font-family="Newsreader,serif" font-size="12" font-style="italic" fill="#1c4f8b">per-env, per-region YAMLs</text>
+            </g>
+
+            <!-- NODE · terraform -->
+            <g transform="translate(400 370)">
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1"/>
+              <text x="14" y="22" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#0f7aff">· TERRAFORM</text>
+              <text x="14" y="44" font-family="Geist Mono,monospace" font-size="12" font-weight="600" fill="#032e61">terraform/…/main.tf</text>
+              <text x="14" y="60" font-family="Geist Mono,monospace" font-size="12" fill="#5e7ba2">locals { cpu = var.cpu ?? "900m" }</text>
+              <text x="14" y="78" font-family="Newsreader,serif" font-size="12" font-style="italic" fill="#1c4f8b">non-helm deployments</text>
+            </g>
+
+            <!-- NODE · hardcoded template -->
+            <g transform="translate(780 340)">
+              <rect x="-6" y="-6" width="292" height="102" rx="12" fill="#ff8c00" opacity=".16"/>
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="#fff2df" stroke="#ff8c00" stroke-width="2.4"/>
+              <rect x="0" y="0" width="280" height="90" rx="8" fill="url(#hashk)" opacity=".18"/>
+              <rect x="210" y="10" width="54" height="18" rx="9" fill="#ff8c00"/>
+              <text x="237" y="23" text-anchor="middle" font-family="Geist Mono,monospace" font-size="8" font-weight="700" letter-spacing="1.2" fill="#001e5b">TRAP</text>
+              <text x="14" y="22" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#c85b00">· HARDCODED TEMPLATES</text>
+              <text x="14" y="44" font-family="Geist Mono,monospace" font-size="12" font-weight="700" fill="#001e5b">templates/*.yaml</text>
+              <text x="14" y="60" font-family="Geist Mono,monospace" font-size="12" fill="#001e5b">cpu: "1500m"     # hardcoded</text>
+              <text x="14" y="78" font-family="Newsreader,serif" font-size="12" font-style="italic" fill="#c85b00">no override can save you</text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="footline">And the <em>"obvious"</em> place silently loses to an SC override three directories away.</div>
+      </div>
+
+      <aside class="notes">
+        These Helm charts live in thousands of repositories, and within each one the CPU request can hide in six different config types: Structured Config overrides, helm.tf addon, the chart's own values.yaml, env-specific overrides, Terraform locals, and hardcoded templates. The value you think you're changing often isn't the value that wins. If it's a hardcoded template, no override can save you — you have to edit the template itself. That's what made this risky and tedious to do by hand, at scale.
+      </aside>
+    </section>
+
+    <!-- slide 08 -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">08</span></div>
+      </div>
+
+      <div class="s-chap">
+        <div class="kicker">Chapter two</div>
+        <div class="num">02</div>
+        <h2>Let's Build an <em>Agent.</em></h2>
+        <div class="sub">An autonomous agent that right-sizes these Helm charts safely at scale — driven by real-time utilization data.</div>
+      </div>
+
+      <aside class="notes">
+        Chapter 2. I have seen the sprawl. The goal: an autonomous agent that right-sizes these Helm charts safely at scale, driven by real-time utilization data from the fleet. To do that the agent has to discover the repo shape, understand how CPU is configured across instances, edit the right files, and open a PR. The first version struggled — and the way it struggled is what shaped everything after.
+      </aside>
+    </section>
+
+    <!-- slide 09 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Primitive inside each stage</span><span class="folio">09</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow">What we built first</div>
+            <h2>The early agent was a state machine wrapped around <em>model/tool loops.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <svg viewBox="0 0 1040 400" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="agent-card-v6" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f4fbff"/>
+                <stop offset="1" stop-color="#dceeff"/>
+              </linearGradient>
+              <linearGradient id="agent-model-v6" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#003b8f"/>
+                <stop offset=".55" stop-color="#001e5b"/>
+                <stop offset="1" stop-color="#001226"/>
+              </linearGradient>
+              <filter id="agent-shadow-v6" x="-20%" y="-30%" width="140%" height="170%">
+                <feDropShadow dx="0" dy="16" stdDeviation="12" flood-color="#001e5b" flood-opacity=".16"/>
+              </filter>
+              <marker id="agent-arrow-v6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                <path d="M0 0 L10 5 L0 10 z" fill="#0f7aff"/>
+              </marker>
+            </defs>
+
+            <path d="M 180 200 C 180 60, 860 60, 860 200 C 860 340, 180 340, 180 200 Z"
+                  fill="none" stroke="#a9c8e6" stroke-width="1.2" stroke-dasharray="6 6" opacity=".8"/>
+
+            <g stroke="#0f7aff" stroke-width="1.8" fill="none" marker-end="url(#arr-react-v5)">
+              <path d="M 250 175 L 442 110"/>
+              <path d="M 610 110 L 730 172"/>
+              <path d="M 820 240 L 608 310"/>
+              <path d="M 442 328 L 250 225"/>
+            </g>
+
+            <g>
+              <circle cx="180" cy="200" r="74" fill="#001e5b"/>
+              <text x="180" y="194" text-anchor="middle" font-family="Geist,sans-serif" font-weight="700" font-size="20" letter-spacing="2.5" fill="#e6eef7">MODEL</text>
+              <text x="180" y="216" text-anchor="middle" font-family="Geist Mono,monospace" font-size="11" fill="#e6eef7" opacity=".82">reasons · decides</text>
+            </g>
+
+            <g>
+              <rect x="446" y="38" width="160" height="80" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1.2"/>
+              <text x="526" y="74" text-anchor="middle" font-family="Geist Mono,monospace" font-size="11" font-weight="600" letter-spacing="2.6" fill="#001e5b">· TOOL CALL</text>
+              <text x="526" y="96" text-anchor="middle" font-family="Geist,sans-serif" font-size="14" fill="#1c4f8b">list · read · search · edit</text>
+              <g fill="#0f7aff"><rect x="462" y="50" width="6" height="6" rx="1"/><rect x="472" y="50" width="6" height="6" rx="1"/><rect x="482" y="50" width="6" height="6" rx="1"/></g>
+            </g>
+
+            <g>
+              <rect x="726" y="160" width="190" height="80" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1.2"/>
+              <text x="821" y="196" text-anchor="middle" font-family="Geist Mono,monospace" font-size="11" font-weight="600" letter-spacing="2.6" fill="#001e5b">· OBSERVATION</text>
+              <text x="821" y="218" text-anchor="middle" font-family="Geist,sans-serif" font-size="14" fill="#1c4f8b">stdout · file · diff</text>
+              <rect x="740" y="172" width="8" height="12" fill="#0f7aff"/>
+            </g>
+
+            <g>
+              <rect x="446" y="292" width="160" height="80" rx="8" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1.2"/>
+              <text x="526" y="328" text-anchor="middle" font-family="Geist Mono,monospace" font-size="11" font-weight="600" letter-spacing="2.6" fill="#001e5b">· GOAL CHECK</text>
+              <text x="526" y="350" text-anchor="middle" font-family="Geist,sans-serif" font-size="14" fill="#1c4f8b">done? → next step</text>
+              <path d="M458 308 l6 6 l12 -12" stroke="#16d987" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="footline">Outer harness was deterministic. <em>The hard work happened inside the loop.</em></div>
+      </div>
+
+      <aside class="notes">
+        Here's what v1 actually looked like. A deterministic outer harness — state machine, config-path discovery, stage handlers, a validation/recovery loop. Inside each stage, a model running tools in a loop until it thought the stage was done. The outer wrapper was deterministic. But the hard work — finding the right config — happened inside that loop.
+      </aside>
+    </section>
+
+    <!-- slide 10 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>The prompt kept growing</span><span class="folio">10</span></div>
+      </div>
+
+      <div class="s-split">
+        <div class="top">
+          <div>
+            <div class="eyebrow">Where v1 ended up</div>
+            <h2>With prompts, we could right-size the standard <em>30%</em>.<br>The growing prompt failed for the <em>rest</em>.</h2>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="col" style="border-left:none">
+            <div class="tag">· v1</div>
+            <div style="font-weight:700;font-size:42px;line-height:1.1;letter-spacing:-1.2px;color:var(--ink);margin:14px 0 6px">One growing prompt</div>
+            <div class="note">Every new repo shape became another natural-language instruction.</div>
+            <div class="art" style="justify-content:center;padding-bottom:10px">
+              <svg width="180" height="196" viewBox="0 0 300 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 60 20 L 240 20 C 250 20 260 30 260 40 L 260 250 C 260 260 250 270 240 270 L 60 270 C 50 270 40 260 40 250 L 40 40 C 40 30 50 20 60 20 Z" fill="#e6eef7" stroke="#001e5b" stroke-width="6"/>
+                <rect x="70" y="40" width="160" height="12" rx="6" fill="#001e5b"/>
+                <circle cx="80" cy="74" r="6" fill="#0f7aff"/>
+                <rect x="96" y="70" width="110" height="8" rx="4" fill="#5e7ba2"/>
+                <circle cx="80" cy="98" r="6" fill="#0f7aff"/>
+                <rect x="96" y="94" width="130" height="8" rx="4" fill="#5e7ba2"/>
+                <circle cx="80" cy="122" r="6" fill="#0f7aff"/>
+                <rect x="96" y="118" width="90" height="8" rx="4" fill="#5e7ba2"/>
+                <path d="M 40 145 L 260 145" stroke="#a9c8e6" stroke-width="3" stroke-dasharray="6 6"/>
+                <circle cx="80" cy="164" r="6" fill="#ff8c00"/>
+                <rect x="96" y="160" width="140" height="8" rx="4" fill="#c85b00"/>
+                <circle cx="80" cy="188" r="6" fill="#ff8c00"/>
+                <rect x="96" y="184" width="100" height="8" rx="4" fill="#c85b00"/>
+                <circle cx="80" cy="212" r="6" fill="#ff8c00"/>
+                <rect x="96" y="208" width="120" height="8" rx="4" fill="#c85b00"/>
+                <circle cx="80" cy="236" r="6" fill="#ff8c00"/>
+                <rect x="96" y="232" width="130" height="8" rx="4" fill="#c85b00"/>
+                <path d="M 40 250 C 40 280 90 280 90 250" fill="none" stroke="#001e5b" stroke-width="6"/>
+                <path d="M 260 250 C 260 280 210 280 210 250" fill="none" stroke="#001e5b" stroke-width="6"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="col hot">
+            <div class="tag">· v2</div>
+            <div style="font-weight:700;font-size:42px;line-height:1.1;letter-spacing:-1.2px;color:var(--clay);margin:14px 0 6px">Split into specialists</div>
+            <div class="note">So we tried the obvious next move: split the work into specialists.</div>
+            <div class="art" style="justify-content:center;padding-bottom:20px">
+              <svg viewBox="0 0 300 160" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M 150 48 L 50 110" stroke="#a9c8e6" stroke-width="2.5" fill="none"/>
+                <path d="M 150 48 L 150 110" stroke="#a9c8e6" stroke-width="2.5" fill="none"/>
+                <path d="M 150 48 L 250 110" stroke="#a9c8e6" stroke-width="2.5" fill="none"/>
+                <rect x="100" y="16" width="100" height="36" rx="8" fill="#001e5b"/>
+                <rect x="20" y="106" width="60" height="28" rx="6" fill="#0f7aff"/>
+                <rect x="120" y="106" width="60" height="28" rx="6" fill="#0f7aff"/>
+                <rect x="220" y="106" width="60" height="28" rx="6" fill="#0f7aff"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        With prompts, we could right-size the standard 30% of services. But for the other 70%, the prompt just kept growing, and v1 stopped working. So I tried the obvious next move: split the work into specialists.
+      </aside>
+    </section>
+
+    <!-- slide 11 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>The architecture · v2</span><span class="folio">11</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow">v2 · the textbook decomposition</div>
+            <h2>One orchestrator. <em>A pipeline of specialists.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <img src="../images/prompt-to-subagent.png" alt="One big prompt splitting into a main orchestrator and nine isolated sub-agent contexts" style="width:100%;height:auto;max-height:460px;object-fit:contain;border-radius:14px;box-shadow:0 12px 36px rgba(0,30,91,.10)"/>
+        </div>
+
+        <div class="footline">Specialization. Context isolation. <em>Surely this has to scale right?</em></div>
+      </div>
+
+      <aside class="notes">
+        Around that time, sub-agents were everywhere. Every blog post, every framework, multi-agent in the title. It felt like this was it. The logic felt airtight — if one prompt can't scale, give each task its own. So we built this. Two weeks of work. Nine boxes. Every sub-agent gets its own task. Surely this scales. I'll be honest at that time I felt — [beat] it was beautiful.
+      </aside>
+    </section>
+
+    <!-- slide 12 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Two PRs · same input</span><span class="folio">12</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow">Same code · same utilization data</div>
+            <h2>Run 1 — 3 files. Run 2 — 5 files. <em>Different plan.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:28px;min-height:0;align-items:stretch">
+          <!-- Run 1 PR card -->
+          <div style="background:#fff;border:1px solid var(--rule);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 30px rgba(0,30,91,.10)">
+            <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#eaf3fb;border-bottom:1px solid var(--rule)">
+              <div style="width:18px;height:18px;border-radius:50%;background:#16d987;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5 l2 2 l4 -4" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></div>
+              <span style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;font-weight:700;color:var(--ink)">RUN 1</span>
+              <span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;color:var(--ink-2);padding:3px 8px;border:1px solid var(--rule);border-radius:999px;background:#fff">3 files · +3 / −3</span>
+              <span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:10.5px;color:var(--muted)">#1247</span>
+            </div>
+            <div style="padding:14px 22px;border-bottom:1px solid var(--rule)">
+              <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.3">PR — rightsize CPU for <span style="font-family:'Geist Mono',monospace;font-size:13.5px;color:var(--ink-2)">service-foo</span></div>
+            </div>
+            <div style="flex:1;padding:18px 22px;font-family:'Geist Mono',monospace;font-size:13px;line-height:1.5;color:var(--ink-2);display:flex;flex-direction:column;justify-content:center;gap:14px">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/global.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 0.8</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 1.5</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/region/us-east.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 1.2</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 1.7</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/instance/svc-23.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 2.0</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 2.4</span></div>
+              </div>
+            </div>
+            <div style="padding:10px 22px;border-top:1px solid var(--rule);font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:var(--muted);background:rgba(0,30,91,.02);text-transform:uppercase">3 modified · 0 added</div>
+          </div>
+
+          <!-- Run 2 PR card -->
+          <div style="background:#fff;border:1px solid var(--rule);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 30px rgba(0,30,91,.10)">
+            <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#fdf1e0;border-bottom:1px solid var(--rule)">
+              <div style="width:18px;height:18px;border-radius:50%;background:#ff8c00;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 2 v4 M5 7.5 v.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+              <span style="font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;font-weight:700;color:var(--ink)">RUN 2</span>
+              <span style="font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.14em;color:var(--ink-2);padding:3px 8px;border:1px solid var(--rule);border-radius:999px;background:#fff">5 files · +5 / −4</span>
+              <span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:10.5px;color:var(--muted)">#1248</span>
+            </div>
+            <div style="padding:14px 22px;border-bottom:1px solid var(--rule)">
+              <div style="font-size:15px;font-weight:600;color:var(--ink);line-height:1.3">PR — rightsize CPU for <span style="font-family:'Geist Mono',monospace;font-size:13.5px;color:var(--ink-2)">service-foo</span></div>
+            </div>
+            <div style="flex:1;padding:18px 22px;font-family:'Geist Mono',monospace;font-size:13px;line-height:1.5;color:var(--ink-2);display:flex;flex-direction:column;justify-content:center;gap:10px">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/global.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 0.8</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 1.4</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:#16a06b;font-weight:700;text-align:center">A</span><span>config/env/prod.yaml <span style="font-family:'Geist Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.16em;color:#16a06b;background:#e6f7ee;padding:1px 6px;border-radius:4px;margin-left:4px">NEW</span></span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#00aa77">+ cpu: 1.6</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/region/eu-west.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 1.0</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 1.3</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/region/ap-south.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 0.9</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 1.2</span></div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:baseline;gap:10px"><span style="display:inline-block;width:14px;color:var(--clay);font-weight:700;text-align:center">M</span><span>config/instance/svc-23.yaml</span></div>
+                <div style="padding-left:24px;color:var(--muted);margin-top:2px"><span style="color:#c85b00">cpu: 2.0</span> <span style="color:var(--ink-3)">→</span> <span style="color:#00aa77">cpu: 2.1</span></div>
+              </div>
+            </div>
+            <div style="padding:10px 22px;border-top:1px solid var(--rule);font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:var(--muted);background:rgba(0,30,91,.02);text-transform:uppercase">4 modified · 1 added</div>
+          </div>
+        </div>
+
+        <div class="footline">Same input. Same code. <em>Different plan.</em></div>
+      </div>
+
+      <aside class="notes">
+        Two pull requests, side by side. Same input behind both. You don't need to read the YAML — different number of files, different files, different numbers inside them. Structurally different PRs for the same problem. If you have a recommendation system you trust enough to open a PR, and same input gives you a different PR every run — you don't have an agent. You have a slot machine. I stared at these two PRs for a long time — and the fix didn't come from the model. It came from rethinking what an agent even is.
+      </aside>
+    </section>
+
+    <!-- slide 13 -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Two-word definition</span><span class="folio">13</span></div>
+      </div>
+
+      <div class="s-hero">
+        <div class="eyebrow">So I stopped tuning the model</div>
+        <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:26px;line-height:1.3;color:#bfa66a;max-width:900px;margin:0 auto 10px">
+          A slot machine isn't a model problem. So what was I actually building?
+        </div>
+        <div class="equation" style="color:#e6eef7">
+          Agent <span class="op">=</span> Model <span class="op">+</span> <em>Harness</em>
+        </div>
+        <div class="note" style="color:#bfa66a">Everything that isn't the model — that's where the leverage lives.</div>
+      </div>
+
+      <aside class="notes">
+        I'd been treating the slot machine as a model problem — reach for a bigger model, a bigger prompt, more sub-agents. But none of those were the issue. So I took a step back and asked what an agent actually is. Here's the two-word definition I landed on: an agent is the model plus the harness. Everything that isn't the model is the harness — and those three knobs I kept reaching for were all the model. The harness was everything around it, and that's where the leverage actually was.
+      </aside>
+    </section>
+
+    <!-- slide 15 -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>Two Kinds of Work</span><span class="folio">14</span></div>
+      </div>
+
+      <div class="s-cold" style="color:#e6eef7">
+        <div class="eyebrow" style="color:#bfa66a">Chapter three</div>
+        <div style="font-weight:700;font-size:120px;line-height:.94;letter-spacing:-0.05em;color:#e6eef7;max-width:1100px">
+          Two Kinds <em style="color:var(--clay);font-style:normal;font-weight:800">of Work.</em>
+        </div>
+        <div style="margin-top:28px;font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:30px;color:#bfa66a;letter-spacing:-.005em">
+          Back to the bug.
+        </div>
+      </div>
+
+      <aside class="notes">
+        Vocabulary loaded. Now back to the bug: two runs, same input, different PRs. The missing harness piece was hiding in the optimizer sub-agent — the part we had casually written a prompt on how it has to optimize the CPU. It wasn't a very simple thought as we will see shortly; our pipeline was mixing two very different kinds of work.
+      </aside>
+    </section>
+
+    <!-- slide 16 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>Two buckets</span><span class="folio">15</span></div>
+      </div>
+
+      <div style="position:absolute;inset:80px 100px 70px;display:flex;flex-direction:column;gap:26px">
+        <div>
+          <div class="eyebrow">The split that matters</div>
+          <h2 style="font-family:Geist,sans-serif;font-size:42px;line-height:1.08;letter-spacing:-1.2px;margin:8px 0 0;color:var(--ink);max-width:1000px">Every step of an agent pipeline is one of <em style="color:var(--clay);font-style:normal">two kinds of work</em>.</h2>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:stretch">
+          <!-- LEFT: Reasoning -->
+          <div style="border:1.5px solid var(--rule);border-radius:14px;padding:28px 30px;background:rgba(255,252,240,.55);display:flex;flex-direction:column;gap:18px;position:relative">
+            <div style="display:flex;align-items:center;gap:14px">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle cx="20" cy="20" r="18" fill="none" stroke="#001e5b" stroke-width="1.6"/>
+                <path d="M12 24 Q14 16 18 18 T26 14" fill="none" stroke="#001e5b" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M26 14 l3 -2 m-3 2 l-1 3" stroke="#001e5b" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              <div>
+                <div style="font-family:Geist Mono,monospace;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);font-weight:600">Bucket 01</div>
+                <div style="font-weight:700;font-size:30px;letter-spacing:-.7px;color:var(--ink)">Reasoning</div>
+              </div>
+            </div>
+            <div style="height:1px;background:var(--rule)"></div>
+            <div style="font-size:21px;line-height:1.42;color:var(--ink);font-weight:500">
+              Discover how CPU is configured across <em style="color:var(--clay);font-style:normal;font-weight:600">this</em> repo.
+            </div>
+            <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px">
+              <li style="font-size:15px;color:var(--ink-2);line-height:1.4;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:#001e5b"></span>
+                Inputs <b>ambiguous.</b> No single correct path.
+              </li>
+              <li style="font-size:15px;color:var(--ink-2);line-height:1.4;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:#001e5b"></span>
+                Tolerance for ambiguity is the LLM's <b>superpower</b>.
+              </li>
+              <li style="font-size:15px;color:var(--ink-2);line-height:1.4;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:#001e5b"></span>
+                The agent has to <em style="color:var(--clay);font-style:normal;font-weight:600">adapt</em>.
+              </li>
+            </ul>
+            <div style="margin-top:auto;padding-top:14px;border-top:1px dashed var(--rule);font-family:Newsreader,Georgia,serif;font-style:italic;font-size:18px;color:var(--ink-2)">
+              Want the creative writer here.
+            </div>
+          </div>
+
+          <!-- RIGHT: Structured -->
+          <div style="border:1.5px solid var(--clay);border-radius:14px;padding:28px 30px;background:rgba(15,122,255,.05);display:flex;flex-direction:column;gap:18px;position:relative">
+            <div style="display:flex;align-items:center;gap:14px">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <rect x="6" y="4" width="28" height="32" rx="3" ry="3" fill="none" stroke="var(--clay)" stroke-width="1.6"/>
+                <rect x="10" y="8" width="20" height="6" rx="1" fill="var(--clay)" opacity=".15"/>
+                <g fill="none" stroke="var(--clay)" stroke-width="1.4" stroke-linecap="round">
+                  <line x1="11" y1="20" x2="13" y2="20"/>
+                  <line x1="17" y1="20" x2="19" y2="20"/>
+                  <line x1="23" y1="20" x2="25" y2="20"/>
+                  <line x1="11" y1="26" x2="13" y2="26"/>
+                  <line x1="17" y1="26" x2="19" y2="26"/>
+                  <line x1="23" y1="26" x2="25" y2="26"/>
+                  <line x1="11" y1="32" x2="13" y2="32"/>
+                  <line x1="17" y1="32" x2="19" y2="32"/>
+                  <line x1="23" y1="32" x2="29" y2="32"/>
+                </g>
+              </svg>
+              <div>
+                <div style="font-family:Geist Mono,monospace;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--clay);font-weight:600">Bucket 02</div>
+                <div style="font-weight:700;font-size:30px;letter-spacing:-.7px;color:var(--ink)">Structured</div>
+              </div>
+            </div>
+            <div style="height:1px;background:var(--rule)"></div>
+            <div style="font-size:21px;line-height:1.42;color:var(--ink);font-weight:500">
+              Compute the optimal CPU plan <em style="color:var(--clay);font-style:normal;font-weight:600">across</em> all instances.
+            </div>
+            <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px">
+              <li style="font-size:15px;color:var(--ink-2);line-height:1.4;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--clay)"></span>
+                Inputs <b>well-defined.</b> Constraints known.
+              </li>
+              <li style="font-size:15px;color:var(--ink-2);line-height:1.4;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--clay)"></span>
+                Answer is <b>mathematically derivable.</b>
+              </li>
+              <li style="font-size:15px;color:var(--ink-2);line-height:1.4;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--clay)"></span>
+                Same input → <em style="color:var(--clay);font-style:normal;font-weight:600">same answer</em>, every time.
+              </li>
+            </ul>
+            <div style="margin-top:auto;padding-top:14px;border-top:1px dashed var(--rule);font-family:Newsreader,Georgia,serif;font-style:italic;font-size:18px;color:var(--ink-2)">
+              This is not creative writing.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        Every task inside an agent pipeline falls into one of two buckets. Reasoning work is repo discovery: given a repo shape the agent may never have seen, infer how CPU is configured across instances, scopes, and override layers. Tolerance for ambiguity is a genuine superpower of LLMs. Structured work is the opposite: the inputs and constraints are defined, and the answer should be mathematically derivable.
+      </aside>
+    </section>
+
+    <!-- slide 17 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>The pivot</span><span class="folio">16</span></div>
+      </div>
+
+      <div class="s-diagram" style="position:absolute;inset:0;box-sizing:border-box;padding:64px 72px 56px;display:flex;flex-direction:column;gap:18px">
+        <div class="top" style="display:flex;justify-content:space-between;align-items:flex-end;gap:48px">
+          <div>
+            <h2>We re-architected the middle. <em>Fewer moving parts, a stronger spine.</em></h2>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;align-items:center;justify-content:center">
+          <svg viewBox="0 0 1140 380" style="width:100%;height:auto;max-height:380px">
+            <defs>
+              <marker id="v3-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 Z" fill="#001e5b"/>
+              </marker>
+            </defs>
+            <!-- Main agent (ghosted) -->
+            <g opacity=".35">
+              <rect x="510" y="20" width="120" height="42" rx="8" ry="8" fill="#fae3c0" stroke="#9c8753" stroke-width="1.5"/>
+              <text x="570" y="46" text-anchor="middle" font-family="Geist Mono,monospace" font-size="10.5" letter-spacing="2" fill="#5e4d24" font-weight="700">MAIN AGENT</text>
+            </g>
+
+            <!-- 9 v2 sub-agents row, mostly ghosted with X -->
+            <g font-family="Geist Mono,monospace" font-size="9.5" letter-spacing="1.4" font-weight="600" text-anchor="middle">
+              <g opacity=".35">
+                <rect x="20" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="70" y="135" fill="#5e4d24">CLASSIFIER</text>
+                <line x1="20" y1="110" x2="120" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="120" y1="110" x2="20" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="140" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="190" y="135" fill="#5e4d24">REPO ANALYZER</text>
+                <line x1="140" y1="110" x2="240" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="240" y1="110" x2="140" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="260" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="310" y="135" fill="#5e4d24">CONFIG LOC.</text>
+                <line x1="260" y1="110" x2="360" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="360" y1="110" x2="260" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="380" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="430" y="135" fill="#5e4d24">VALIDATOR</text>
+                <line x1="380" y1="110" x2="480" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="480" y1="110" x2="380" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="500" y="110" width="140" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="570" y="135" fill="#5e4d24">OPTIMIZER</text>
+                <line x1="500" y1="110" x2="640" y2="150" stroke="#c85b00" stroke-width="3"/>
+                <line x1="640" y1="110" x2="500" y2="150" stroke="#c85b00" stroke-width="3"/>
+              </g>
+              <g opacity=".35">
+                <rect x="660" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="710" y="135" fill="#5e4d24">SCOPE PICKER</text>
+                <line x1="660" y1="110" x2="760" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="760" y1="110" x2="660" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="780" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="830" y="135" fill="#5e4d24">PLAN APPLIER</text>
+                <line x1="780" y1="110" x2="880" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="880" y1="110" x2="780" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="900" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="950" y="135" fill="#5e4d24">PR WRITER</text>
+                <line x1="900" y1="110" x2="1000" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="1000" y1="110" x2="900" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+              <g opacity=".35">
+                <rect x="1020" y="110" width="100" height="40" rx="6" fill="#e0d4b3" stroke="#9c8753"/>
+                <text x="1070" y="135" fill="#5e4d24">REVIEWER</text>
+                <line x1="1020" y1="110" x2="1120" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+                <line x1="1120" y1="110" x2="1020" y2="150" stroke="#c85b00" stroke-width="2.5"/>
+              </g>
+            </g>
+
+            <!-- Collapse arrow -->
+            <g stroke="var(--clay)" stroke-width="2" fill="none">
+              <line x1="100" y1="200" x2="1080" y2="200" stroke-dasharray="4 6" opacity=".5"/>
+              <path d="M570 174 L570 226" stroke-width="3" stroke-linecap="round"/>
+              <polyline points="560 220 570 232 580 220" stroke-linejoin="round" stroke-width="3"/>
+            </g>
+
+            <!-- v3 row: 3 flat cards joined by wires with editorial italic captions -->
+            <g text-anchor="middle">
+              <!-- Connector wires (slightly below box mid-line so captions sit cleanly above) -->
+              <g fill="none" stroke="#001e5b" stroke-width="1.4" stroke-linecap="round">
+                <line x1="330" y1="302" x2="478" y2="302" marker-end="url(#v3-arrow)"/>
+                <line x1="660" y1="302" x2="808" y2="302" marker-end="url(#v3-arrow)"/>
+              </g>
+
+              <!-- Wire captions: italic serif, mirrors the box subtitle typography -->
+              <text x="404" y="288" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="13" fill="#0f7aff">structured output: json</text>
+              <text x="734" y="288" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="13" fill="#0f7aff">optimization plan</text>
+
+              <!-- Discover -->
+              <rect x="150" y="246" width="180" height="92" rx="8" fill="#fffdf5" stroke="#001e5b" stroke-width="1.8"/>
+              <text x="240" y="282" font-family="Geist Mono,monospace" font-size="13" letter-spacing="2.2" font-weight="700" fill="#001e5b">DISCOVER</text>
+              <text x="240" y="312" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="14" fill="#5e4d24">LLM &middot; reasoning</text>
+
+              <!-- ILP Solver -->
+              <rect x="480" y="246" width="180" height="92" rx="8" fill="#0f7aff" stroke="#001e5b" stroke-width="1.8"/>
+              <text x="570" y="282" font-family="Geist Mono,monospace" font-size="13" letter-spacing="2.2" font-weight="700" fill="#ffffff">ILP SOLVER</text>
+              <text x="570" y="312" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="14" fill="rgba(255,255,255,.92)">deterministic &middot; math</text>
+
+              <!-- Apply -->
+              <rect x="810" y="246" width="180" height="92" rx="8" fill="#fffdf5" stroke="#001e5b" stroke-width="1.8"/>
+              <text x="900" y="282" font-family="Geist Mono,monospace" font-size="13" letter-spacing="2.2" font-weight="700" fill="#001e5b">APPLY</text>
+              <text x="900" y="312" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="14" fill="#5e4d24">LLM &middot; reasoning</text>
+            </g>
+
+          </svg>
+        </div>
+
+        <div class="footline" style="text-align:center;font-weight:500;font-size:30px;color:var(--ink);letter-spacing:-0.022em">
+          <em style="color:var(--clay);font-style:normal;font-weight:700">Reasoning → Structured → Reasoning</em>
+        </div>
+      </div>
+
+      <aside class="notes">
+        So v3 stopped asking nine sub-agents to reason their way to a structured answer. We kept the LLM where ambiguity was real: Discover maps how CPU is configured across instances in that repo, and Apply makes the surgical YAML edits. In the middle, Plan became pure code — a deterministic solver — so the core planner is now 100% repeatable. I still say only the core planner, not whole PR, and we'll come back to that caveat when we open the harness.
+      </aside>
+    </section>
+
+    <style>
+      .ldemo input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:4px; background:#cbb787; border-radius:2px; outline:none; cursor:pointer; }
+      .ldemo input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%; background:#0f7aff; border:2px solid #fffdf5; cursor:grab; box-shadow:0 1px 3px rgba(0,30,91,.35); transition:transform .12s ease; }
+      .ldemo input[type=range]::-webkit-slider-thumb:active{ cursor:grabbing; transform:scale(1.15); }
+      .ldemo input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; background:#0f7aff; border:2px solid #fffdf5; cursor:grab; }
+      .ldemo input[type=range]:disabled{ opacity:.35; }
+      .ldemo .lslider-row{ border:1.2px solid var(--rule); border-radius:10px; padding:10px 12px; background:rgba(255,253,245,.6); transition:border-color .18s ease, background .18s ease; }
+      .ldemo .lslider-row.active{ border-color:#0f7aff; background:rgba(15,122,255,.06); }
+      .ldemo .lslider-row.disabled{ opacity:.55; }
+      .ldemo .lslider-row.hovering{ border-color:#c85b00; background:rgba(200,91,0,.05); }
+      .ldemo .ltoggle{ width:30px; height:18px; border-radius:99px; background:#cbb787; position:relative; cursor:pointer; transition:background .18s ease; flex-shrink:0; }
+      .ldemo .ltoggle.on{ background:#0f7aff; }
+      .ldemo .ltoggle::after{ content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fffdf5; transition:left .18s ease; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+      .ldemo .ltoggle.on::after{ left:14px; }
+      .ldemo .linstance{ height:100%; min-height:140px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+      .ldemo .lbarwrap{ position:relative; flex:1; width:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; }
+      .ldemo .lbar{ width:100%; max-width:34px; border-radius:4px 4px 0 0; transition:height .35s cubic-bezier(.2,.8,.2,1), background .25s ease, box-shadow .2s ease; min-height:2px; }
+      .ldemo .lbar.under{ background:linear-gradient(180deg,#e88a4a 0%,#c85b00 100%); }
+      .ldemo .lbar.between{ background:linear-gradient(180deg,#f1c45c 0%,#cf9512 100%); }
+      .ldemo .lbar.optimal{ background:linear-gradient(180deg,#3eb87a 0%,#0a8754 100%); }
+      .ldemo .lbar.waste{ background:linear-gradient(180deg,#9c8753 0%,#5e4d24 100%); }
+      .ldemo .lbar.highlight{ box-shadow:0 0 0 2px #0f7aff, 0 0 12px rgba(15,122,255,.5); }
+      .ldemo .lbar.highlight-prod{ box-shadow:0 0 0 2px #c85b00, 0 0 12px rgba(200,91,0,.5); }
+      .ldemo .lline-ideal{ position:absolute; left:6%; right:6%; border-top:2.5px dashed #0a8754; pointer-events:none; z-index:2; }
+      .ldemo .lline-ideal-val{ position:absolute; right:-2px; transform:translateY(-100%); font-family:Geist Mono,monospace; font-size:10px; font-weight:800; color:#0a8754; background:#fffdf5; padding:1px 4px; border-radius:3px; border:1px solid #3eb87a; line-height:1.2; pointer-events:none; z-index:3; }
+      .ldemo .ltag{ font-family:Geist Mono,monospace; font-size:7.5px; letter-spacing:.6px; color:#7a6d4a; font-weight:600; line-height:1.2; text-align:center; min-height:20px; flex-shrink:0; }
+      .ldemo .ltag.rebel{ color:#c85b00; font-weight:800; }
+      .ldemo .ldemo-action{ font-family:Geist Mono,monospace; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; background:transparent; border:1px solid var(--rule); padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:600; color:var(--muted); transition:all .15s ease; }
+      .ldemo .ldemo-action:hover{ background:#fff7e8; border-color:var(--clay); color:var(--clay); }
+      .ldemo .ldemo-action.solve{ background:#001e5b; color:#fff; border-color:#001e5b; padding:10px 22px; font-size:11.5px; letter-spacing:.22em; }
+      .ldemo .ldemo-action.solve:hover{ background:#0f7aff; border-color:#0f7aff; color:#fff; }
+      .ldemo .ldemo-action.solve:disabled{ opacity:.5; cursor:not-allowed; background:#001e5b; color:#fff; }
+      .ldemo .ldemo-solving{ font-family:Geist Mono,monospace; font-size:10.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--clay); font-weight:700; opacity:0; transition:opacity .15s ease; }
+      .ldemo .ldemo-solving.visible{ opacity:1; }
+      .ldemo .ldemo-solving::after{ content:"…"; display:inline-block; animation:ldemo-dots 1.2s steps(4,end) infinite; }
+      @keyframes ldemo-dots{ 0%,20%{ content:""; } 40%{ content:"."; } 60%{ content:".."; } 80%,100%{ content:"..."; } }
+    </style>
+
+    <!-- slide 18 -->
+    <section class="sheet" data-transition="fade" id="slide-ilp-solve">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>The right tool</span><span class="folio">17</span></div>
+      </div>
+
+      <div class="ldemo" data-ldemo-root="d31" style="position:absolute;inset:48px 60px 40px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:32px">
+          <div>
+            <div class="eyebrow">a solver does this in seconds</div>
+            <h2 style="font-family:Geist,sans-serif;font-size:34px;line-height:1.08;letter-spacing:-1.1px;margin:6px 0 0;color:var(--ink);max-width:1100px">
+              <em style="color:var(--clay);font-style:normal">Integer Linear Programming.</em> Same answer every run.
+            </h2>
+          </div>
+
+          <div data-ldemo-counters style="display:flex;gap:10px;font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.18em;font-weight:700;flex-shrink:0">
+            <div data-ldemo-chip="covered" style="border:1.4px solid #c85b00;background:#fff7e8;color:#5e2c08;padding:8px 12px;border-radius:8px;min-width:88px;text-align:center">
+              <div style="font-size:9px;letter-spacing:.22em;color:#9c8753;margin-bottom:2px">COVERED</div>
+              <div data-ldemo-covered style="font-size:18px;letter-spacing:0;font-family:Geist,sans-serif;font-weight:800;color:#c85b00">0/12</div>
+            </div>
+            <div style="border:1.4px solid #0a8754;background:#eaf6ee;color:#053a23;padding:8px 12px;border-radius:8px;min-width:88px;text-align:center">
+              <div style="font-size:9px;letter-spacing:.22em;color:#5d8a72;margin-bottom:2px">OPTIMAL</div>
+              <div data-ldemo-optimal style="font-size:18px;letter-spacing:0;font-family:Geist,sans-serif;font-weight:800;color:#0a8754">0/12</div>
+            </div>
+            <div style="border:1.4px solid #001e5b;background:#eaf2ff;color:#001e5b;padding:8px 12px;border-radius:8px;min-width:88px;text-align:center">
+              <div style="font-size:9px;letter-spacing:.22em;color:#5d6f9c;margin-bottom:2px">KNOBS</div>
+              <div data-ldemo-knobs style="font-size:18px;letter-spacing:0;font-family:Geist,sans-serif;font-weight:800;color:#001e5b">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:340px 1fr;gap:36px;align-items:stretch">
+
+          <div data-ldemo-sliders style="display:flex;flex-direction:column;gap:12px;padding-top:6px">
+            <div style="font-family:Geist Mono,monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);font-weight:600">override scopes · most specific wins ↓</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-left:34px">
+              <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-2);font-weight:700">resolved CPU per instance <span style="color:var(--muted);font-weight:600">(cores)</span></div>
+              <div style="display:flex;gap:14px;font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.14em;color:var(--ink-2);font-weight:700">
+                <span><span style="display:inline-block;width:18px;height:0;border-top:2.5px dashed #0a8754;vertical-align:middle;margin-right:6px"></span>ideal <span style="color:var(--muted);font-weight:600">(cores)</span></span>
+              </div>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:30px 1fr;gap:6px;align-items:stretch">
+              <div style="display:flex;align-items:center;justify-content:center">
+                <div style="font-family:Geist,sans-serif;font-size:14px;letter-spacing:.28em;color:var(--ink);font-weight:800;writing-mode:vertical-rl;transform:rotate(180deg)">CPU (CORES) &rarr;</div>
+              </div>
+              <div data-ldemo-instances style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px;align-items:end;background:linear-gradient(180deg,#faf6e9 0%,#f4ecd8 100%);border:1px solid #cbb787;border-radius:10px;padding:14px 14px 22px"></div>
+            </div>
+            <div style="padding-left:34px;text-align:center;font-family:Geist,sans-serif;font-size:14px;letter-spacing:.28em;color:var(--ink);font-weight:800">12 INSTANCES &rarr;</div>
+          </div>
+        </div>
+
+        <!-- Footer: Solve button is the centerpiece -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding-top:2px">
+          <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:18px;color:var(--ink);letter-spacing:-.005em;max-width:540px">
+            A solver picks the <em style="color:var(--clay);font-style:italic;font-weight:600">smallest set of knobs</em> that clears every floor — without flailing.
+          </div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div data-ldemo-solving class="ldemo-solving">solving</div>
+            <button class="ldemo-action solve" data-ldemo-solve>▶ prob.solve()</button>
+            <button class="ldemo-action" data-ldemo-reset>↺ Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        This starts with the familiar move: one global default, cranked high enough to cover the worst case. It covers twelve out of twelve, but look at the cost — most instances are overprovisioned. ILP turns this into decision variables: which knobs should be enabled, what value should each knob take, and which instances does each knob cover?
+        Intuitively, the solver is asking: can I cover every instance, waste the least CPU, and use the fewest knobs? A broad knob is cheap to configure but can waste a lot; a specific knob is precise but adds another override to maintain. ILP searches that tradeoff directly. Run it here, and it throws away the global knob, picks PROD, DEV, and one most-specific override for the rebel — three knobs, everything green, same answer every run.
+      </aside>
+
+      <script>
+        window.createLayeredDemo = window.createLayeredDemo || function(root, options){
+          options = options || {};
+
+          const SCOPES = [
+            { id:'global',   name:'GLOBAL',           sub:'controls all 12',       match:()=>true,                                                color:'#001e5b' },
+            { id:'prod',     name:'PROD',             sub:'controls 6 (env=prod)', match:i=>i.env==='prod',                                       color:'#0f7aff' },
+            { id:'dev',      name:'DEV',              sub:'controls 5 (env=dev)',  match:i=>i.env==='dev'&&!(i.cluster==='aws-dev1'&&i.region==='us-west-2'), color:'#0f7aff' },
+            { id:'aws-dev1', name:'AWS-DEV1·USWEST2', sub:'controls 1',            match:i=>i.cluster==='aws-dev1'&&i.region==='us-west-2',       color:'#c85b00' },
+          ];
+
+          // 12 instances. min/ideal are dotted lines (demo units, 0..100).
+          // 6 prod (lines ~50), 5 quiet dev (lines ~30), 1 rebel dev (line ~85).
+          const INSTANCES = [
+            { id:'i-1',  env:'prod', region:'us-east-1', cluster:'aws-prod1', min:48, ideal:55 },
+            { id:'i-2',  env:'prod', region:'us-east-1', cluster:'aws-prod1', min:46, ideal:54 },
+            { id:'i-3',  env:'prod', region:'eu-west-1', cluster:'aws-prod2', min:52, ideal:60 },
+            { id:'i-4',  env:'prod', region:'eu-west-1', cluster:'aws-prod2', min:50, ideal:58 },
+            { id:'i-5',  env:'prod', region:'ap-south-1',cluster:'aws-prod3', min:44, ideal:52 },
+            { id:'i-6',  env:'prod', region:'ap-south-1',cluster:'aws-prod3', min:47, ideal:55 },
+            { id:'i-7',  env:'dev',  region:'us-east-1', cluster:'aws-dev2',  min:24, ideal:32 },
+            { id:'i-8',  env:'dev',  region:'us-east-1', cluster:'aws-dev2',  min:22, ideal:30 },
+            { id:'i-9',  env:'dev',  region:'eu-west-1', cluster:'aws-dev3',  min:26, ideal:34 },
+            { id:'i-10', env:'dev',  region:'eu-west-1', cluster:'aws-dev3',  min:25, ideal:33 },
+            { id:'i-11', env:'dev',  region:'us-west-2', cluster:'aws-dev1',  min:78, ideal:86, rebel:true },
+            { id:'i-12', env:'dev',  region:'us-west-2', cluster:'aws-dev2',  min:28, ideal:36 },
+          ];
+
+          // initialState: optional { scopeId: { on, value } } override for the boot state.
+          // Reset() restores back to this same state.
+          const initialState = options.initialState || null;
+          function buildBlankState(){
+            const s = {};
+            SCOPES.forEach(sc => {
+              const seed = initialState && initialState[sc.id];
+              s[sc.id] = seed ? { on:!!seed.on, value:seed.value } : { on:false, value:50 };
+            });
+            return s;
+          }
+          const state = buildBlankState();
+
+          const sliderHost = root.querySelector('[data-ldemo-sliders]');
+          const instHost   = root.querySelector('[data-ldemo-instances]');
+          const coveredEl  = root.querySelector('[data-ldemo-covered]');
+          const optimalEl  = root.querySelector('[data-ldemo-optimal]');
+          const knobsEl    = root.querySelector('[data-ldemo-knobs]');
+
+          // Build sliders (DOM reflects state[scope].on at init)
+          SCOPES.forEach(scope => {
+            const on = state[scope.id].on;
+            const row = document.createElement('div');
+            row.className = 'lslider-row ' + (on ? 'active' : 'disabled');
+            row.dataset.scopeId = scope.id;
+            row.style.display = 'flex';
+            row.style.flexDirection = 'column';
+            row.style.gap = '8px';
+            row.innerHTML = `
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="ltoggle ${on?'on':''}" data-scope="${scope.id}" role="button" aria-pressed="${on}"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:1px">
+                  <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.14em;color:#001e5b;font-weight:700">${scope.name}</div>
+                  <div style="font-family:Geist Mono,monospace;font-size:8.5px;letter-spacing:.14em;color:var(--muted);font-weight:600">${scope.sub}</div>
+                </div>
+                <div class="lvalue" data-scope="${scope.id}" style="font-family:Geist,sans-serif;font-size:18px;font-weight:700;color:${on?'#001e5b':'#cbb787'};min-width:38px;text-align:right">${state[scope.id].value}</div>
+              </div>
+              <input type="range" min="0" max="100" value="${state[scope.id].value}" data-scope="${scope.id}" ${on?'':'disabled'} />
+            `;
+            sliderHost.appendChild(row);
+          });
+
+          // Build instance bars
+          INSTANCES.forEach(inst => {
+            const cell = document.createElement('div');
+            cell.className = 'linstance';
+            cell.dataset.instanceId = inst.id;
+            cell.innerHTML = `
+              <div class="lbarwrap">
+                <div class="lline-ideal" style="bottom:${inst.ideal}%"><span class="lline-ideal-val">${inst.ideal}</span></div>
+                <div class="lbar under" data-bar style="height:0%"></div>
+              </div>
+              <div class="ltag${inst.rebel?' rebel':''}">${inst.id}<br/>${inst.env}</div>
+            `;
+            instHost.appendChild(cell);
+          });
+
+          function resolve(inst){
+            let val = null;
+            for (const s of SCOPES){
+              if (state[s.id].on && s.match(inst)) val = state[s.id].value;
+            }
+            return val;
+          }
+
+          function render(){
+            let covered = 0, optimal = 0, knobsUsed = 0;
+            SCOPES.forEach(s => { if (state[s.id].on) knobsUsed++; });
+
+            INSTANCES.forEach(inst => {
+              const cell = instHost.querySelector(`[data-instance-id="${inst.id}"]`);
+              const bar  = cell.querySelector('[data-bar]');
+              const v    = resolve(inst);
+              if (v === null){
+                bar.style.height = '0%';
+                bar.className = 'lbar under';
+                return;
+              }
+              bar.style.height = Math.max(2, Math.min(100, v)) + '%';
+              bar.classList.remove('under','between','optimal','waste','highlight','highlight-prod');
+              if (v < inst.ideal){
+                bar.classList.add('under');
+              } else if (v <= inst.ideal + 8){
+                covered++; optimal++; bar.classList.add('optimal');
+              } else {
+                covered++; bar.classList.add('waste');
+              }
+            });
+
+            coveredEl.textContent = covered + '/12';
+            optimalEl.textContent = optimal + '/12';
+            knobsEl.textContent   = String(knobsUsed);
+            coveredEl.style.color = covered === 12 ? '#0a8754' : '#c85b00';
+            const chip = coveredEl.parentElement;
+            chip.style.borderColor = covered === 12 ? '#0a8754' : '#c85b00';
+            chip.style.background  = covered === 12 ? '#eaf6ee' : '#fff7e8';
+          }
+
+          function highlightScope(scopeId){
+            const scope = SCOPES.find(s => s.id === scopeId);
+            INSTANCES.forEach(inst => {
+              const cell = instHost.querySelector(`[data-instance-id="${inst.id}"]`);
+              const bar  = cell.querySelector('[data-bar]');
+              bar.classList.remove('highlight','highlight-prod');
+              if (scope && scope.match(inst)){
+                bar.classList.add(scope.id === 'aws-dev1' ? 'highlight-prod' : 'highlight');
+              }
+            });
+          }
+          function clearHighlight(){
+            instHost.querySelectorAll('[data-bar]').forEach(b => b.classList.remove('highlight','highlight-prod'));
+          }
+
+          // Toggle a scope on/off in state + DOM (without re-running the slider input listener)
+          function setScopeOn(scopeId, on, value){
+            state[scopeId].on = !!on;
+            if (typeof value === 'number') state[scopeId].value = value;
+
+            const toggle = sliderHost.querySelector(`.ltoggle[data-scope="${scopeId}"]`);
+            const row    = sliderHost.querySelector(`.lslider-row[data-scope-id="${scopeId}"]`);
+            const input  = sliderHost.querySelector(`input[data-scope="${scopeId}"]`);
+            const valEl  = sliderHost.querySelector(`.lvalue[data-scope="${scopeId}"]`);
+            toggle.classList.toggle('on', !!on);
+            toggle.setAttribute('aria-pressed', !!on);
+            row.classList.toggle('disabled', !on);
+            row.classList.toggle('active',   !!on);
+            input.disabled = !on;
+            input.value    = state[scopeId].value;
+            valEl.textContent = state[scopeId].value;
+            valEl.style.color = on ? '#001e5b' : '#cbb787';
+          }
+
+          // Wire toggles
+          sliderHost.querySelectorAll('.ltoggle').forEach(t => {
+            t.addEventListener('click', e => {
+              e.stopPropagation();
+              if (root.dataset.solving === '1') return;
+              const id = t.dataset.scope;
+              setScopeOn(id, !state[id].on);
+              render();
+            });
+          });
+
+          // Wire sliders
+          sliderHost.querySelectorAll('input[type=range]').forEach(inp => {
+            inp.addEventListener('input', e => {
+              e.stopPropagation();
+              if (root.dataset.solving === '1') return;
+              const id = inp.dataset.scope;
+              state[id].value = parseInt(inp.value, 10);
+              const valEl = sliderHost.querySelector(`.lvalue[data-scope="${id}"]`);
+              valEl.textContent = state[id].value;
+              render();
+            });
+            inp.addEventListener('mousedown',  e => e.stopPropagation());
+            inp.addEventListener('touchstart', e => e.stopPropagation(), { passive:true });
+          });
+
+          // Hover row → highlight matching instances
+          sliderHost.querySelectorAll('.lslider-row').forEach(row => {
+            const id = row.dataset.scopeId;
+            row.addEventListener('mouseenter', () => { if (root.dataset.solving === '1') return; row.classList.add('hovering'); highlightScope(id); });
+            row.addEventListener('mouseleave', () => { row.classList.remove('hovering'); clearHighlight(); });
+          });
+
+          function reset(){
+            const seed = buildBlankState();
+            SCOPES.forEach(s => setScopeOn(s.id, seed[s.id].on, seed[s.id].value));
+            clearHighlight();
+            render();
+          }
+
+          // Reset button (slide 30)
+          const resetBtn = root.querySelector('[data-ldemo-reset]');
+          if (resetBtn){
+            resetBtn.addEventListener('click', e => { e.stopPropagation(); reset(); });
+          }
+
+          // Solve button (slide 31). Animates to a predetermined optimum:
+          //   PROD = 55  (covers all 6 prod, near ideal)
+          //   DEV  = 33  (covers all 5 quiet dev, near ideal)
+          //   AWS-DEV1·USWEST2 = 86 (covers the rebel)
+          // GLOBAL stays off — the solver realizes it's redundant.
+          const solveBtn   = root.querySelector('[data-ldemo-solve]');
+          const solvingTag = root.querySelector('[data-ldemo-solving]');
+          if (solveBtn){
+            solveBtn.addEventListener('click', e => {
+              e.stopPropagation();
+              if (root.dataset.solving === '1') return;
+              root.dataset.solving = '1';
+              solveBtn.disabled = true;
+              if (solvingTag) solvingTag.classList.add('visible');
+
+              // Start from the slide's seeded state (e.g. GLOBAL high → over-provisioned).
+              reset();
+
+              // Animate a slider value smoothly over `dur` ms.
+              function animateSlider(scopeId, targetV, dur){
+                return new Promise(resolve => {
+                  const startT  = performance.now();
+                  const startV  = state[scopeId].value;
+                  const inp = sliderHost.querySelector(`input[data-scope="${scopeId}"]`);
+                  const val = sliderHost.querySelector(`.lvalue[data-scope="${scopeId}"]`);
+                  function tick(now){
+                    const t = Math.min(1, (now - startT) / dur);
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    const v = Math.round(startV + (targetV - startV) * eased);
+                    state[scopeId].value = v;
+                    if (inp) inp.value = v;
+                    if (val) val.textContent = v;
+                    render();
+                    if (t < 1) requestAnimationFrame(tick);
+                    else resolve();
+                  }
+                  requestAnimationFrame(tick);
+                });
+              }
+              const wait = ms => new Promise(r => setTimeout(r, ms));
+
+              // Solver narrative — slow, deliberate. Each step is a separate beat.
+              //   1. Turn GLOBAL off (drop the wasteful default)
+              //   2. Bring up PROD at 55  (covers prod, near ideal)
+              //   3. Bring up DEV  at 33  (covers quiet dev, near ideal)
+              //   4. Bring up the most-specific knob at 86 (handles the rebel)
+              (async () => {
+                await wait(500);
+
+                // Step 1 — drop GLOBAL
+                if (state.global.on){
+                  highlightScope('global');
+                  await wait(350);
+                  setScopeOn('global', false);
+                  render();
+                  await wait(200);
+                  clearHighlight();
+                  await wait(450);
+                }
+
+                // Step 2 — PROD lifts every prod instance just past its ideal
+                setScopeOn('prod', true, state.prod.value);
+                highlightScope('prod');
+                await animateSlider('prod', 60, 600);
+                await wait(250);
+                clearHighlight();
+                await wait(350);
+
+                // Step 3 — DEV lifts every quiet-dev instance just past its ideal
+                setScopeOn('dev', true, state.dev.value);
+                highlightScope('dev');
+                await animateSlider('dev', 36, 600);
+                await wait(250);
+                clearHighlight();
+                await wait(350);
+
+                // Step 4 — most specific knob handles the rebel exactly at its ideal
+                setScopeOn('aws-dev1', true, state['aws-dev1'].value);
+                highlightScope('aws-dev1');
+                await animateSlider('aws-dev1', 86, 600);
+                await wait(350);
+                clearHighlight();
+                await wait(300);
+
+                // Settle
+                root.dataset.solving = '0';
+                solveBtn.disabled = false;
+                if (solvingTag) solvingTag.classList.remove('visible');
+                render();
+              })();
+            });
+          }
+
+          // Stop reveal.js from eating clicks/keys on this demo
+          root.addEventListener('keydown', e => e.stopPropagation());
+
+          render();
+          return { reset, setScopeOn, render };
+        };
+
+        (function(){
+          const root = document.querySelector('[data-ldemo-root="d31"]');
+          if (root && window.createLayeredDemo) {
+            // Boot in an over-provisioned baseline: GLOBAL is on at a high value.
+            // Every instance is "covered" but most are wastefully above ideal —
+            // the audience sees what we're paying for before the solver runs.
+            window.createLayeredDemo(root, {
+              initialState: {
+                global: { on:true, value:85 },
+              },
+            });
+          }
+        })();
+      </script>
+    </section>
+
+    <!-- slide 19 -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>The most important sentence</span><span class="folio">18</span></div>
+      </div>
+
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:96px 120px;text-align:center;gap:32px">
+        <div class="eyebrow" style="color:#bfa66a">The sentence</div>
+        <div style="font-family:Geist,sans-serif;font-weight:600;font-size:64px;line-height:1.08;letter-spacing:-0.034em;color:#e6eef7;max-width:1100px">
+          The best AI agent we built was the one that knew <em style="color:var(--clay);font-style:normal;font-weight:700">when not to use AI</em>.
+        </div>
+        <div style="width:72px;height:3px;background:var(--clay)"></div>
+      </div>
+
+      <aside class="notes">
+        This became my favorite sentence from the whole project: the best AI agent I built was the one that knew when not to use AI. That was the structural fix: v3 still used LLMs, but only where ambiguity belonged, and the plan stopped drifting. Next, let's look at where that landed — the v3 architecture, end to end.
+      </aside>
+    </section>
+
+    <!-- slide 20 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3 · THE v3 ARCHITECTURE</div>
+        <div class="right"><span>Discover &rarr; Solver &rarr; Apply</span><span class="folio">19</span></div>
+      </div>
+
+      <div style="position:absolute;inset:96px 56px 56px 56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+        <div style="font-family:Geist Mono,monospace;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--teal);font-weight:700">&middot; CONTEXT ENGINEERED &middot; THE PLAN STOPPED DRIFTING ✓</div>
+
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0">
+          <svg viewBox="0 0 1100 480" style="width:100%;max-width:1180px;height:auto;max-height:100%" aria-label="Agent diagram, managed state: teal sealed envelopes around Discover (lean) and Apply (sub-agent firewall)">
+            <defs>
+              <marker id="d3-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--ink-2)"/></marker>
+            </defs>
+
+            <!-- Sealed teal envelopes -->
+            <rect x="50" y="130" width="300" height="240" rx="14" fill="rgba(22,217,135,.08)" stroke="var(--teal)" stroke-width="2"/>
+            <rect x="694" y="92" width="352" height="376" rx="14" fill="rgba(22,217,135,.08)" stroke="var(--teal)" stroke-width="2"/>
+
+
+            <!-- Discover -->
+            <g>
+              <rect x="80" y="160" width="240" height="180" rx="10" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.6"/>
+              <text x="98" y="186" font-family="Geist Mono,monospace" font-size="10" letter-spacing="2" font-weight="700" fill="var(--muted)">01</text>
+              <text x="200" y="240" text-anchor="middle" font-family="Geist,sans-serif" font-size="22" font-weight="700" fill="var(--ink)" letter-spacing="-.5px">DISCOVER</text>
+              <text x="200" y="266" text-anchor="middle" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="13" fill="var(--ink-2)">LLM</text>
+            </g>
+
+            <line x1="320" y1="250" x2="396" y2="250" stroke="var(--ink-2)" stroke-width="1.8" marker-end="url(#d3-arr)"/>
+
+            <!-- ILP Solver -->
+            <g>
+              <rect x="400" y="160" width="240" height="180" rx="10" fill="var(--clay)" stroke="var(--ink)" stroke-width="1.6"/>
+              <text x="418" y="186" font-family="Geist Mono,monospace" font-size="10" letter-spacing="2" font-weight="700" fill="rgba(255,255,255,.75)">02</text>
+              <text x="520" y="240" text-anchor="middle" font-family="Geist,sans-serif" font-size="22" font-weight="700" fill="#fff" letter-spacing="-.5px">ILP SOLVER</text>
+              <text x="520" y="266" text-anchor="middle" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="13" fill="rgba(255,255,255,.92)">deterministic</text>
+              <text x="520" y="296" text-anchor="middle" font-family="Geist Mono,monospace" font-size="9" letter-spacing="1.6" font-weight="700" fill="rgba(255,255,255,.7)">&middot; 0 tokens</text>
+            </g>
+
+            <line x1="640" y1="250" x2="716" y2="250" stroke="var(--ink-2)" stroke-width="1.8" marker-end="url(#d3-arr)"/>
+
+            <!-- Apply (with PR Creator sub-agent) -->
+            <g>
+              <rect x="720" y="120" width="300" height="320" rx="10" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.6"/>
+              <text x="738" y="146" font-family="Geist Mono,monospace" font-size="10" letter-spacing="2" font-weight="700" fill="var(--muted)">03</text>
+              <text x="870" y="186" text-anchor="middle" font-family="Geist,sans-serif" font-size="22" font-weight="700" fill="var(--ink)" letter-spacing="-.5px">APPLY</text>
+              <text x="870" y="212" text-anchor="middle" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="13" fill="var(--ink-2)">LLM</text>
+              <g>
+                <rect x="738" y="278" width="264" height="148" rx="8" fill="var(--paper-2)" stroke="var(--clay)" stroke-width="1.8"/>
+                <text x="870" y="360" text-anchor="middle" font-family="Geist,sans-serif" font-size="20" font-weight="700" fill="var(--ink)" letter-spacing="-.4px">PR CREATOR</text>
+                <text x="870" y="388" text-anchor="middle" font-family="Newsreader,Georgia,serif" font-style="italic" font-size="12" fill="var(--ink-2)">sub-agent</text>
+              </g>
+            </g>
+
+            <line x1="1004" y1="352" x2="1042" y2="352" stroke="var(--ink-2)" stroke-width="1.8" marker-end="url(#d3-arr)"/>
+            <g>
+              <rect x="1048" y="320" width="50" height="64" rx="8" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.6"/>
+              <text x="1073" y="356" text-anchor="middle" font-family="Geist,sans-serif" font-size="18" font-weight="700" fill="var(--ink)">PR</text>
+            </g>
+          </svg>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:24px">
+          <div style="padding:10px 22px;border-radius:22px;background:var(--teal);font-family:Geist Mono,monospace;font-size:13px;letter-spacing:.24em;font-weight:800;color:#fff;text-transform:uppercase">✓ Reasoning &middot; Structured &middot; Reasoning</div>
+          <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:24px;color:var(--ink);letter-spacing:-.005em">
+            Each tool doing <em style="color:var(--clay);font-style:italic;font-weight:600">what it's best at.</em>
+          </div>
+        </div>
+
+        <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.16em;color:var(--ink-2);text-align:center">
+          Safe by construction &middot; tunes CPU <em style="color:var(--clay);font-style:normal;font-weight:700">requests</em> only &middot; leaves <em style="color:var(--ink);font-style:normal;font-weight:700">limits</em> for scaling headroom &middot; ships as a reviewable PR
+        </div>
+      </div>
+
+      <aside class="notes">
+        This is where v3 landed. Two LLM surfaces, sealed in teal: Discover stays lean, Apply runs a sub-agent firewall around PR Creator, and the ILP solver in the middle does the deterministic math at zero tokens. Reasoning on the ends, structured work in the middle — each tool doing what it's best at. That's the context engineering that made the plan stop drifting. And it's safe by construction: the agent only ever tunes CPU requests and never touches CPU limits, so scaling headroom is preserved, and every change ships as a reviewable pull request through the normal pipeline.
+      </aside>
+    </section>
+
+    <!-- slide 21 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · RECAP</div>
+        <div class="right"><span>The story so far</span><span class="folio">20</span></div>
+      </div>
+
+      <div style="position:absolute;inset:46px 64px 40px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:24px">
+          <div>
+            <h2 style="font-family:Geist,sans-serif;font-size:38px;line-height:1.06;letter-spacing:-1.1px;margin:6px 0 0;color:var(--ink);max-width:1100px">
+              The <em style="color:var(--clay);font-style:normal">story</em> so far.
+            </h2>
+          </div>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;min-height:0">
+
+          <!-- COL 1 · THE AGENT -->
+          <div style="border:1.5px solid var(--rule);border-radius:14px;background:rgba(255,252,240,.5);padding:20px 22px;display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <div style="font-family:Geist Mono,monospace;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--clay);font-weight:700">01 · the agent</div>
+              <div style="font-family:Geist Mono,monospace;font-size:10px;color:var(--muted);letter-spacing:.2em">v1 &rarr; v3</div>
+            </div>
+            <div style="font-family:Geist,sans-serif;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-.3px;line-height:1.2">
+              Three generations to a plan we trust.
+            </div>
+            <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px">
+              <li style="display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start">
+                <span style="font-family:Geist Mono,monospace;font-size:10px;color:var(--clay);font-weight:700;letter-spacing:.14em;padding-top:3px">V1</span>
+                <div style="font-size:13px;color:var(--ink-2);line-height:1.42"><b style="color:var(--ink)">One ReAct agent.</b> Every rule in one prompt. <em style="color:var(--clay);font-style:italic;font-weight:600">Bloated scroll.</em></div>
+              </li>
+              <li style="display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start">
+                <span style="font-family:Geist Mono,monospace;font-size:10px;color:var(--clay);font-weight:700;letter-spacing:.14em;padding-top:3px">V2</span>
+                <div style="font-size:13px;color:var(--ink-2);line-height:1.42"><b style="color:var(--ink)">Nine sub-agents.</b> Beautiful diagram. <em style="color:var(--clay);font-style:italic;font-weight:600">Same input &rarr; two different PRs.</em></div>
+              </li>
+              <li style="display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start">
+                <span style="font-family:Geist Mono,monospace;font-size:10px;color:var(--clay);font-weight:700;letter-spacing:.14em;padding-top:3px">V3</span>
+                <div style="font-size:13px;color:var(--ink-2);line-height:1.42"><b style="color:var(--ink)">Discover &rarr; Solver &rarr; Apply.</b> Two LLMs + ILP. <em style="color:var(--clay);font-style:italic;font-weight:600">Same plan, every run.</em></div>
+              </li>
+            </ol>
+            <div style="margin-top:auto;padding-top:10px;border-top:1px dashed var(--rule);font-family:Newsreader,Georgia,serif;font-style:italic;font-size:13px;color:var(--ink-2);line-height:1.4">
+              Reasoning &rarr; Structured &rarr; Reasoning. Each tool doing what it's best at.
+            </div>
+          </div>
+
+          <!-- COL 2 · THE HARNESS -->
+          <div style="border:1.5px solid var(--rule);border-radius:14px;background:rgba(15,122,255,.04);padding:20px 22px;display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <div style="font-family:Geist Mono,monospace;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--clay);font-weight:700">02 &middot; the reframe</div>
+              <div style="font-family:Geist Mono,monospace;font-size:10px;color:var(--muted);letter-spacing:.2em">the fix</div>
+            </div>
+            <div style="font-family:Geist,sans-serif;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-.3px;line-height:1.2">
+              <em style="color:var(--clay);font-style:normal">Agent = Model + Harness.</em>
+            </div>
+            <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px">
+              <li style="font-size:13px;color:var(--ink-2);line-height:1.42;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--clay)"></span>
+                The fix was never a bigger prompt or a better model.
+              </li>
+              <li style="font-size:13px;color:var(--ink-2);line-height:1.42;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--clay)"></span>
+                It was moving the <b style="color:var(--ink)">structured work out of the LLM</b>.
+              </li>
+              <li style="font-size:13px;color:var(--ink-2);line-height:1.42;padding-left:18px;position:relative">
+                <span style="position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--clay)"></span>
+                Reasoning stays with the LLM; the <b style="color:var(--ink)">math goes to a solver</b>.
+              </li>
+            </ul>
+            <div style="margin-top:auto;padding-top:10px;border-top:1px dashed var(--rule);font-family:Newsreader,Georgia,serif;font-style:italic;font-size:13px;color:var(--ink-2);line-height:1.4">
+              Same model &middot; different harness &middot; <em style="color:var(--clay);font-style:italic;font-weight:600">the harness is where the leverage lives.</em>
+            </div>
+          </div>
+
+          <!-- COL 3 · THE TAKE-HOME -->
+          <div style="border:1.5px solid var(--clay);border-radius:14px;background:rgba(200,91,0,.04);padding:20px 22px;display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <div style="font-family:Geist Mono,monospace;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--clay);font-weight:700">03 &middot; take-home</div>
+              <div style="font-family:Geist Mono,monospace;font-size:10px;color:var(--muted);letter-spacing:.2em">what to keep</div>
+            </div>
+            <div style="font-family:Geist,sans-serif;font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-.3px;line-height:1.2">
+              Three lessons for the next agent.
+            </div>
+            <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px">
+              <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start">
+                <span style="font-family:Geist Mono,monospace;font-size:10.5px;color:var(--clay);font-weight:700">01</span>
+                <span style="font-size:13.5px;color:var(--ink-2);line-height:1.4"><b style="color:var(--ink)">Separate reasoning from computation.</b> Ambiguity to the LLM, math to code.</span>
+              </li>
+              <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start">
+                <span style="font-family:Geist Mono,monospace;font-size:10.5px;color:var(--clay);font-weight:700">02</span>
+                <span style="font-size:13.5px;color:var(--ink-2);line-height:1.4"><b style="color:var(--ink)">Use deterministic systems for deterministic problems.</b> Same input &rarr; same answer.</span>
+              </li>
+              <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start">
+                <span style="font-family:Geist Mono,monospace;font-size:10.5px;color:var(--clay);font-weight:700">03</span>
+                <span style="font-size:13.5px;color:var(--ink-2);line-height:1.4"><b style="color:var(--ink)">Improve the harness, not the prompt.</b> The leverage is around the model.</span>
+              </li>
+            </ol>
+            <div style="margin-top:auto;padding-top:10px;border-top:1px dashed var(--clay);font-family:Newsreader,Georgia,serif;font-style:italic;font-size:13px;color:var(--ink-2);line-height:1.4">
+              Best practice is not more prompting. It is <em style="color:var(--clay);font-style:italic;font-weight:600">better harness.</em>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- footline &middot; the outcome -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 22px;border:1.5px solid var(--clay);border-radius:12px;background:#fffcf0">
+          <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);font-weight:700">Iterating on context engineering &middot; accuracy toward 100%</div>
+          <div style="font-family:Geist,sans-serif;font-size:22px;font-weight:600;color:var(--ink);letter-spacing:-.4px;text-align:center">
+            Same input. <em style="color:var(--clay);font-style:normal;font-weight:700">Same plan.</em> Every run.
+          </div>
+          <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:15px;color:var(--ink-2);text-align:center">
+            In production across thousands of services &mdash; <em style="color:var(--clay);font-style:italic;font-weight:600">millions in capacity reclaimed.</em>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        Quick recap before we close. Three threads. The agent — v1 was one ReAct loop with a bloated prompt, v2 was nine sub-agents that drifted, and v3 is Discover, Solver, Apply: reasoning on the ends, structured work in the middle. The reframe — Agent equals Model plus Harness; the fix was never a bigger prompt or a better model, it was moving the structured work out of the LLM and into a deterministic solver. And the three lessons to take home: separate reasoning from computation, use deterministic systems for deterministic problems, and improve the harness, not the prompt. The payoff: the plan stopped drifting. Same input, same plan, every run — accuracy that climbs toward 100%. That agent now runs in production across thousands of services, and it's reclaimed millions in capacity. Best practice is not more prompting. It is better harness.
+      </aside>
+    </section>
+
+    <!-- slide 22 -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · END</div>
+        <div class="right"><span>Q &amp; A</span><span class="folio">21</span></div>
+      </div>
+
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:48px">
+        <div class="eyebrow">End card</div>
+
+        <div style="font-family:Geist,sans-serif;font-weight:700;font-size:160px;line-height:.92;letter-spacing:-0.05em;color:var(--ink);max-width:1100px">
+          Questions <em style="color:var(--clay);font-style:normal;font-weight:800">?</em>
+        </div>
+
+        <div style="width:96px;height:3px;background:var(--clay)"></div>
+
+        <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:24px;color:var(--ink-2);letter-spacing:-.005em;max-width:880px;margin-top:24px">
+          Also accepting <em style="color:var(--clay);font-style:italic;font-weight:600">unsolicited horror stories</em> about your own agents.
+        </div>
+      </div>
+
+      <aside class="notes">
+        [Hand off to moderator. Happy to take questions — and cheerfully accepting unsolicited horror stories about your own agents.]
+      </aside>
+    </section>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    width:  1280,
+    height: 720,
+    margin: 0,
+    minScale: 0.2,
+    maxScale: 2.0,
+
+    center: false,
+    controls: true,
+    controlsTutorial: false,
+    progress: true,
+    hash: true,
+    history: false,
+    keyboard: true,
+    touch: true,
+    loop: false,
+    slideNumber: 'c/t',
+    showSlideNumber: 'speaker',
+
+    transition: 'fade',
+    transitionSpeed: 'default',
+    backgroundTransition: 'none',
+
+    overview: true,
+    help: true,
+
+    plugins: [ RevealNotes ]
+  });
+</script>
+</body>
+</html>
