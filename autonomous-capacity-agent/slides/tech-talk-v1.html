@@ -1800,25 +1800,25 @@
           const SCOPES = [
             { id:'global',   name:'GLOBAL',           sub:'controls all 12',       match:()=>true,                                                color:'#001e5b' },
             { id:'prod',     name:'PROD',             sub:'controls 6 (env=prod)', match:i=>i.env==='prod',                                       color:'#0f7aff' },
-            { id:'dev',      name:'DEV',              sub:'controls 5 (env=dev)',  match:i=>i.env==='dev'&&!(i.cluster==='aws-dev1'&&i.region==='us-west-2'), color:'#0f7aff' },
-            { id:'aws-dev1', name:'AWS-DEV1·USWEST2', sub:'controls 1',            match:i=>i.cluster==='aws-dev1'&&i.region==='us-west-2',       color:'#c85b00' },
+            { id:'dev',      name:'DEV',              sub:'controls 5 (env=dev)',  match:i=>i.env==='dev'&&!(i.cluster==='cluster-7'&&i.region==='region-4'), color:'#0f7aff' },
+            { id:'cluster-7', name:'CLUSTER-7·REGION-4', sub:'controls 1',            match:i=>i.cluster==='cluster-7'&&i.region==='region-4',       color:'#c85b00' },
           ];
 
           // 12 instances. min/ideal are dotted lines (demo units, 0..100).
           // 6 prod (lines ~50), 5 quiet dev (lines ~30), 1 rebel dev (line ~85).
           const INSTANCES = [
-            { id:'i-1',  env:'prod', region:'us-east-1', cluster:'aws-prod1', min:48, ideal:55 },
-            { id:'i-2',  env:'prod', region:'us-east-1', cluster:'aws-prod1', min:46, ideal:54 },
-            { id:'i-3',  env:'prod', region:'eu-west-1', cluster:'aws-prod2', min:52, ideal:60 },
-            { id:'i-4',  env:'prod', region:'eu-west-1', cluster:'aws-prod2', min:50, ideal:58 },
-            { id:'i-5',  env:'prod', region:'ap-south-1',cluster:'aws-prod3', min:44, ideal:52 },
-            { id:'i-6',  env:'prod', region:'ap-south-1',cluster:'aws-prod3', min:47, ideal:55 },
-            { id:'i-7',  env:'dev',  region:'us-east-1', cluster:'aws-dev2',  min:24, ideal:32 },
-            { id:'i-8',  env:'dev',  region:'us-east-1', cluster:'aws-dev2',  min:22, ideal:30 },
-            { id:'i-9',  env:'dev',  region:'eu-west-1', cluster:'aws-dev3',  min:26, ideal:34 },
-            { id:'i-10', env:'dev',  region:'eu-west-1', cluster:'aws-dev3',  min:25, ideal:33 },
-            { id:'i-11', env:'dev',  region:'us-west-2', cluster:'aws-dev1',  min:78, ideal:86, rebel:true },
-            { id:'i-12', env:'dev',  region:'us-west-2', cluster:'aws-dev2',  min:28, ideal:36 },
+            { id:'i-1',  env:'prod', region:'region-1', cluster:'cluster-1', min:48, ideal:55 },
+            { id:'i-2',  env:'prod', region:'region-1', cluster:'cluster-1', min:46, ideal:54 },
+            { id:'i-3',  env:'prod', region:'region-2', cluster:'cluster-2', min:52, ideal:60 },
+            { id:'i-4',  env:'prod', region:'region-2', cluster:'cluster-2', min:50, ideal:58 },
+            { id:'i-5',  env:'prod', region:'region-3',cluster:'cluster-3', min:44, ideal:52 },
+            { id:'i-6',  env:'prod', region:'region-3',cluster:'cluster-3', min:47, ideal:55 },
+            { id:'i-7',  env:'dev',  region:'region-1', cluster:'cluster-5',  min:24, ideal:32 },
+            { id:'i-8',  env:'dev',  region:'region-1', cluster:'cluster-5',  min:22, ideal:30 },
+            { id:'i-9',  env:'dev',  region:'region-2', cluster:'cluster-6',  min:26, ideal:34 },
+            { id:'i-10', env:'dev',  region:'region-2', cluster:'cluster-6',  min:25, ideal:33 },
+            { id:'i-11', env:'dev',  region:'region-4', cluster:'cluster-7',  min:78, ideal:86, rebel:true },
+            { id:'i-12', env:'dev',  region:'region-4', cluster:'cluster-5',  min:28, ideal:36 },
           ];
 
           // initialState: optional { scopeId: { on, value } } override for the boot state.
@@ -1926,7 +1926,7 @@
               const bar  = cell.querySelector('[data-bar]');
               bar.classList.remove('highlight','highlight-prod');
               if (scope && scope.match(inst)){
-                bar.classList.add(scope.id === 'aws-dev1' ? 'highlight-prod' : 'highlight');
+                bar.classList.add(scope.id === 'cluster-7' ? 'highlight-prod' : 'highlight');
               }
             });
           }
@@ -2002,7 +2002,7 @@
           // Solve button (slide 31). Animates to a predetermined optimum:
           //   PROD = 55  (covers all 6 prod, near ideal)
           //   DEV  = 33  (covers all 5 quiet dev, near ideal)
-          //   AWS-DEV1·USWEST2 = 86 (covers the rebel)
+          //   CLUSTER-7·REGION-4 = 86 (covers the rebel)
           // GLOBAL stays off — the solver realizes it's redundant.
           const solveBtn   = root.querySelector('[data-ldemo-solve]');
           const solvingTag = root.querySelector('[data-ldemo-solving]');
@@ -2076,9 +2076,9 @@
                 await wait(350);
 
                 // Step 4 — most specific knob handles the rebel exactly at its ideal
-                setScopeOn('aws-dev1', true, state['aws-dev1'].value);
-                highlightScope('aws-dev1');
-                await animateSlider('aws-dev1', 86, 600);
+                setScopeOn('cluster-7', true, state['cluster-7'].value);
+                highlightScope('cluster-7');
+                await animateSlider('cluster-7', 86, 600);
                 await wait(350);
                 clearHighlight();
                 await wait(300);
