@@ -22,7 +22,7 @@ The arc:
 4. **Two kinds of work** — reasoning vs. structured computation (and where ILP fits).
 5. **Context engineering** — iterating on the harness to a plan you can trust, the same plan every run.
 
-### [I Refactored a Legacy Codebase With Ralph That Was Estimated to Cost 1 Dev Month](ralph-legacy-refactor/slides/tech-talk-v1.html)
+### [How I Refactored a Legacy Codebase With Ralph That Was Estimated to Cost 1 Dev Month](ralph-legacy-refactor/slides/tech-talk-v1.html)
 
 `ralph-legacy-refactor/`
 
