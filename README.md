@@ -22,6 +22,21 @@ The arc:
 4. **Two kinds of work** — reasoning vs. structured computation (and where ILP fits).
 5. **Context engineering** — iterating on the harness to a plan you can trust, the same plan every run.
 
+### [How I Refactored a Legacy Codebase With Ralph That Was Estimated to Cost 1 Dev Month](ralph-legacy-refactor/slides/tech-talk-v1.html)
+
+`ralph-legacy-refactor/`
+
+A ~450,000-line codebase, built over 10+ years across ~25 Bazel projects, that we estimated would take a developer a month to refactor — handed instead to Ralph, an autonomous agent loop. This talk covers why long-running agents hit *context rot*, how the Ralph loop sidesteps it by giving every iteration fresh context, and the engineering discipline that kept the output production-quality.
+
+The arc:
+
+1. **Coding agents** — great on small tasks; the task horizon problem.
+2. **Context rot** — why accuracy decays as context grows, and agents become unreliable.
+3. **The Ralph loop** — `while :; do cat PROMPT.md | agent ; done` — a fresh context every turn.
+4. **How it works** — `prd.json` of small, verifiable tasks; learnings shared between runs via files.
+5. **The real refactor** — uninterrupted runs, a commit-validate loop, AI code reviews, and the human as quality gate.
+6. **Key takeaways** — plan with an expensive model, implement with a cheaper one; CI, tests, and reviews are prerequisites.
+
 ## Running locally
 
 ```bash

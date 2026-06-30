@@ -1,0 +1,1771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>AI in Production: How I Refactored a Legacy Codebase With Ralph That Was Estimated to Cost 1 Dev Month</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@300;400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════
+     TOKENS — Salesforce 2026 brand palette
+       paper / ink anchored to the uploaded SVG (#cfe9fe / #001e5b)
+       accents pulled from official swatches: Electric Blue, Orange, Teal
+  ═══════════════════════════════════════════════════════════════════════ */
+  :root{
+    --paper:#cfe9fe;        /* SVG sky · ≈ Indigo 90 (#c4e3ff) */
+    --paper-2:#b5d9f5;
+    --paper-3:#e5f1fc;
+    --ink:#001e5b;          /* SVG navy · between Cloud Blue 20/30 */
+    --ink-2:#0a2a4f;
+    --ink-3:#1c4f8b;
+    --muted:#5e7ba2;
+    --rule:#a9c8e6;
+    --rule-soft:#cae0f4;
+    --clay:#0f7aff;         /* Electric Blue 60 · primary accent */
+    --clay-deep:#0540ff;    /* Electric Blue 30 */
+    --clay-soft:#57a8ff;    /* Electric Blue 70 */
+    --rust:#001e5b;
+    --mustard:#ff8c00;      /* Orange 70 · warm CTA accent */
+    --mustard-deep:#c85b00; /* Orange 50 */
+    --sage:#16d987;         /* Teal 60 · success / "good" */
+    --teal:#00aa77;         /* Teal 50 */
+    --navy:#001e5b;
+    --stage:#00173d;        /* Cloud Blue 20 · dark stage */
+    --stage-2:#001226;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     STAGE — fixed 1280×720 paper sheet, editorial feel
+  ═══════════════════════════════════════════════════════════════════════ */
+  html,body,.reveal{
+    background:var(--stage);
+    color:var(--ink);
+    font-family:"Geist",ui-sans-serif,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    font-feature-settings:"ss01","cv01","cv02";
+  }
+
+  .reveal .slides{text-align:initial}
+
+  .reveal .slides > section,
+  .reveal .slides > section > section{
+    width:1280px;height:720px;
+    padding:0 !important;
+    top:0 !important;left:0 !important;
+    margin:0 !important;
+    background:var(--paper);
+    color:var(--ink);
+    overflow:hidden;
+    display:block;
+    box-shadow:0 40px 80px -30px rgba(0,0,0,.55), 0 20px 40px -20px rgba(0,0,0,.35);
+  }
+
+  /* clean Salesforce sheet: subtle cool gradient, no fiber/noise */
+  .reveal .slides section.sheet::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(1200px 600px at 92% -10%, rgba(0,161,224,.10), transparent 60%),
+      radial-gradient(800px 400px at -10% 110%, rgba(3,46,97,.06), transparent 60%);
+  }
+  .reveal .slides section.sheet::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow: inset 0 0 0 1px rgba(3,46,97,.06), inset 0 0 80px rgba(3,46,97,.04);
+  }
+  .reveal .slides section.sheet > *{z-index:1}
+  .reveal .slides section.sheet > .bg-layer{position:absolute;inset:0;z-index:0}
+
+  /* Dark variant — hero / full-bleed moments, deep Salesforce navy */
+  .reveal .slides section.dark{
+    background:var(--stage);color:#e6eef7;
+  }
+  .reveal .slides section.dark::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(900px 600px at 20% 20%, rgba(0,161,224,.18), transparent 65%),
+      radial-gradient(700px 500px at 80% 80%, rgba(95,176,232,.10), transparent 60%);
+  }
+  .reveal .slides section.dark::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow: inset 0 0 0 1px rgba(207,225,244,.05), inset 0 0 140px rgba(0,0,0,.55);
+  }
+  .reveal .slides section.dark > *{z-index:1}
+
+  /* Full-image variant — uses the NotebookLM illustrations, bordered */
+  .reveal .slides section.plate{
+    background:var(--paper-3);
+  }
+  .reveal .slides section.plate::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    box-shadow: inset 0 0 0 1px rgba(28,23,18,.06), inset 0 0 80px rgba(28,23,18,.05);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CHROME — editorial header strip
+  ═══════════════════════════════════════════════════════════════════════ */
+  .chrome{
+    position:absolute;top:28px;left:56px;right:56px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.24em;
+    font-weight:500;color:var(--ink-2);text-transform:uppercase;z-index:3;
+  }
+  .sheet  .chrome{color:var(--ink-2)}
+  .plate  .chrome{color:var(--ink-2)}
+  .dark   .chrome{color:#c9bfa4}
+  .chrome .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--clay);margin-right:10px;vertical-align:middle}
+  .chrome .folio{font-variant-numeric:tabular-nums}
+  .chrome .right{display:flex;gap:18px;align-items:center}
+
+  .sig{
+    position:absolute;left:56px;bottom:28px;
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:10px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--muted);z-index:3;
+  }
+  .sig.r{left:auto;right:56px;text-align:right}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SHARED TYPE
+  ═══════════════════════════════════════════════════════════════════════ */
+  .eyebrow{
+    font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.28em;font-size:11px;font-weight:500;color:var(--clay);
+  }
+  .eyebrow.mustard{color:var(--mustard-deep)}
+  .eyebrow.teal{color:var(--teal)}
+  h1,h2,h3,p{margin:0}
+
+  /* Reusable "serif italic" caption in the NotebookLM plate style */
+  .plate-cap{
+    font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:22px;line-height:1.3;color:var(--ink-2);text-align:center;letter-spacing:-.005em;
+  }
+  .plate-cap em{font-style:italic;color:var(--clay);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · COLD OPEN
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-cold{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    padding:96px 120px;text-align:center;}
+  .s-cold .eyebrow{margin-bottom:40px}
+  .s-cold .pair{display:flex;gap:140px;align-items:flex-end;margin-bottom:44px}
+  .s-cold .pair > div{display:flex;flex-direction:column;align-items:center}
+  .s-cold .num{font-weight:600;font-size:220px;line-height:.9;letter-spacing:-0.055em;color:var(--ink);
+    font-feature-settings:"tnum","ss01"}
+  .s-cold .label{margin-top:18px;font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.24em;font-size:11px;font-weight:500;color:var(--ink-2)}
+  .s-cold .caption{margin-top:24px;font-weight:500;font-size:32px;color:var(--ink);
+    letter-spacing:-0.022em;line-height:1.2}
+  .s-cold .caption em{color:var(--clay);font-style:normal;font-weight:600}
+  .hand-rule{display:block;width:340px;height:18px;margin:10px auto 0;color:var(--rule)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TITLE CARD
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-title{position:absolute;inset:0;box-sizing:border-box;
+    padding:140px 120px;display:flex;flex-direction:column;justify-content:center;gap:26px}
+  .s-title .eyebrow{margin-bottom:4px}
+  .s-title h1{font-weight:700;font-size:128px;line-height:.94;letter-spacing:-0.05em;color:var(--ink);max-width:1100px}
+  .s-title h1 em{color:var(--clay);font-style:normal;font-weight:800}
+  .s-title .sub{font-weight:500;font-size:28px;color:var(--ink-2);letter-spacing:-0.018em;margin-top:8px;max-width:960px;line-height:1.28}
+  .s-title .sub em{color:var(--clay);font-style:normal;font-weight:600}
+  .s-title .byline{display:flex;align-items:center;gap:22px;margin-top:36px;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+  .s-title .byline .bar{width:36px;height:2px;background:var(--clay)}
+  .s-title .byline b{color:var(--ink);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · HERO EQUATION / PULL
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-hero{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    padding:120px;text-align:center;gap:28px}
+  .s-hero .eyebrow{color:var(--mustard);margin-bottom:24px}
+  .dark .s-hero .eyebrow{color:var(--mustard)}
+  .s-hero .equation{font-weight:600;font-size:108px;line-height:1;letter-spacing:-0.04em}
+  .s-hero .equation em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-hero .equation .op{color:var(--muted);font-weight:400;margin:0 22px}
+  .dark .s-hero .equation .op{color:#5e7ba2}
+  .s-hero .note{margin-top:18px;font-family:"Geist Mono",ui-monospace,monospace;font-size:12.5px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · PULL QUOTE
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-quote{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:18px}
+  .s-quote .mark{font-family:"Newsreader",serif;font-size:170px;line-height:.7;color:var(--clay);letter-spacing:-0.05em;font-weight:600;opacity:.28;margin-bottom:-10px}
+  .s-quote blockquote{margin:0;font-weight:500;font-size:64px;line-height:1.08;letter-spacing:-0.032em;color:var(--ink);max-width:1080px}
+  .dark .s-quote blockquote{color:#e6eef7}
+  .s-quote blockquote em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-quote .attrib{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-top:14px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · BIG TEXT (bold declarative)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-big{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;padding:120px 160px;gap:28px}
+  .s-big .eyebrow{margin-bottom:6px}
+  .s-big .line{font-weight:600;font-size:68px;line-height:1.08;letter-spacing:-0.035em;color:var(--ink);max-width:1060px}
+  .dark .s-big .line{color:#e6eef7}
+  .s-big .line em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-big .rule{width:72px;height:3px;background:var(--clay)}
+  .s-big .note{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-top:12px;max-width:900px;line-height:1.7}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · HERO STAT
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-stat{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;padding:120px;text-align:center;gap:22px}
+  .s-stat .eyebrow{color:var(--mustard-deep);margin-bottom:10px}
+  .s-stat .big{font-weight:700;font-size:240px;line-height:.9;letter-spacing:-0.055em;color:var(--clay);
+    font-feature-settings:"tnum","ss01"}
+  .s-stat .legend{font-weight:500;font-size:28px;color:var(--ink);max-width:960px;letter-spacing:-0.018em;line-height:1.3}
+  .s-stat .legend b{color:var(--ink);font-weight:600}
+  .s-stat .source{margin-top:18px;font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · LIST (promises, numbered)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-list{position:absolute;inset:0;box-sizing:border-box;
+    padding:120px 120px 96px;display:flex;flex-direction:column;justify-content:center;gap:32px}
+  .s-list .head{display:flex;align-items:baseline;gap:18px}
+  .s-list h2{font-weight:600;font-size:44px;letter-spacing:-0.028em;line-height:1.1}
+  .s-list h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-list ol{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:22px;counter-reset:promise}
+  .s-list li{counter-increment:promise;display:grid;grid-template-columns:64px 1fr;gap:24px;align-items:baseline}
+  .s-list li::before{
+    content:"0" counter(promise);
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;font-weight:600;
+    color:var(--clay);letter-spacing:.1em;padding-top:4px;
+    border-top:1.5px solid var(--clay);width:44px;
+  }
+  .s-list li p{font-size:21px;line-height:1.4;color:var(--ink-2);font-weight:400;letter-spacing:-0.012em;max-width:900px}
+  .s-list li p b{color:var(--ink);font-weight:600}
+  .s-list li p em{color:var(--clay);font-style:normal;font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · DIAGRAM (title + svg canvas + footline)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-diagram{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 88px 64px;display:flex;flex-direction:column;gap:20px}
+  .s-diagram .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-diagram .top .eyebrow{margin-bottom:10px}
+  .s-diagram h2{font-weight:600;font-size:40px;line-height:1.1;letter-spacing:-0.028em;color:var(--ink);max-width:880px}
+  .s-diagram h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-diagram .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .s-diagram .canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;width:100%}
+  .s-diagram .canvas svg{width:100%;height:auto;max-height:460px;flex:1 1 auto}
+  .s-diagram .footline{text-align:center;font-weight:500;font-size:21px;color:var(--ink);letter-spacing:-0.018em}
+  .s-diagram .footline em{font-style:normal;color:var(--clay);font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · PLATE (NotebookLM illustration, centered with caption)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-plate{position:absolute;inset:0;box-sizing:border-box;
+    padding:76px 88px 60px;display:flex;flex-direction:column;gap:16px}
+  .s-plate .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-plate .top .eyebrow{margin-bottom:8px}
+  .s-plate h2{font-weight:600;font-size:32px;line-height:1.15;letter-spacing:-0.022em;color:var(--ink);max-width:900px}
+  .s-plate h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-plate .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .s-plate .plate-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;
+    background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:10px;position:relative}
+  .s-plate .plate-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 0 1px rgba(28,23,18,.04), inset 0 0 40px rgba(28,23,18,.04);border-radius:6px}
+  .s-plate .plate-wrap img{max-width:100%;max-height:100%;display:block;object-fit:contain;
+    filter:contrast(1.02) saturate(1.02)}
+  .s-plate .footline{text-align:center;font-weight:500;font-size:20px;color:var(--ink-2);letter-spacing:-0.018em;padding:0 40px}
+  .s-plate .footline em{font-style:normal;color:var(--clay);font-weight:700}
+
+  /* Plate without outer title — full-bleed illustration with only caption */
+  .s-plate-full{position:absolute;inset:0;box-sizing:border-box;
+    padding:64px 72px 54px;display:flex;flex-direction:column;gap:14px}
+  .s-plate-full .plate-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;
+    background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:16px;position:relative}
+  .s-plate-full .plate-wrap img{max-width:100%;max-height:100%;display:block;object-fit:contain}
+  .s-plate-full .plate-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 0 1px rgba(28,23,18,.04), inset 0 0 40px rgba(28,23,18,.04);border-radius:6px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TWO-COLUMN SPLIT (30% / 70%)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-split{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 72px 72px;display:flex;flex-direction:column;gap:24px}
+  .s-split .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-split h2{font-weight:600;font-size:36px;line-height:1.1;letter-spacing:-0.028em;color:var(--ink);max-width:900px}
+  .s-split h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-split .grid{flex:1;display:grid;grid-template-columns:1fr 1.4fr;gap:0;border-top:1px solid var(--rule);min-height:0}
+  .s-split .col{padding:28px 32px 0;display:flex;flex-direction:column;gap:14px;min-width:0}
+  .s-split .col + .col{border-left:1px solid var(--rule)}
+  .s-split .col .pct{font-weight:700;font-size:118px;line-height:.9;letter-spacing:-0.05em;color:var(--ink);font-feature-settings:"tnum"}
+  .s-split .col.warm .pct{color:var(--sage)}
+  .s-split .col.hot  .pct{color:var(--clay)}
+  .s-split .col .tag{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.22em;
+    font-size:11px;font-weight:600;color:var(--ink)}
+  .s-split .col .note{font-size:16px;line-height:1.5;color:var(--ink-2);max-width:520px}
+  .s-split .col .art{margin-top:auto;height:170px;display:flex;align-items:flex-end}
+  .s-split .col .art svg{width:100%;height:100%}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · COMPARE (two cards side-by-side)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-compare{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 88px 64px;display:flex;flex-direction:column;gap:22px}
+  .s-compare .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-compare h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;color:var(--ink)}
+  .s-compare h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-compare .grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:28px;min-height:0}
+  .card{
+    border:1px solid var(--rule);border-radius:12px;padding:28px 30px;background:rgba(255,252,240,.42);
+    display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden;
+  }
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--clay)}
+  .card.b::before{background:var(--teal)}
+  .card .kicker{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.22em;
+    font-size:11px;font-weight:600;color:var(--ink)}
+  .card h3{font-weight:600;font-size:30px;letter-spacing:-0.02em;color:var(--ink);line-height:1.1}
+  .card p{font-size:16.5px;line-height:1.55;color:var(--ink-2);max-width:520px}
+  .card ul{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .card li{padding-left:18px;position:relative;font-size:15.5px;color:var(--ink-2);line-height:1.45}
+  .card li::before{content:"";position:absolute;left:0;top:10px;width:8px;height:2px;background:var(--clay)}
+  .card.b li::before{background:var(--teal)}
+  .card .icon{align-self:flex-start;margin-bottom:-2px}
+  .card .foot{margin-top:auto;padding-top:14px;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.24em;text-transform:uppercase;font-weight:600}
+  .card .foot.clay{color:var(--clay)}
+  .card .foot.teal{color:var(--teal)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · CAUSES (two-bullet)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-causes{position:absolute;inset:0;box-sizing:border-box;
+    padding:120px 120px 96px;display:flex;flex-direction:column;justify-content:center;gap:32px}
+  .s-causes h2{font-weight:600;font-size:36px;line-height:1.14;letter-spacing:-0.028em;color:var(--ink);max-width:920px}
+  .s-causes h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-causes .items{display:flex;flex-direction:column;gap:22px;margin-top:6px}
+  .cause{display:grid;grid-template-columns:64px 1fr auto;gap:24px;align-items:center;
+    padding:26px 28px;border:1px solid var(--rule);border-radius:10px;background:rgba(255,252,240,.4)}
+  .cause .n{font-family:"Geist Mono",ui-monospace,monospace;font-size:14px;font-weight:600;color:var(--clay);letter-spacing:.1em}
+  .cause .t{font-weight:500;font-size:26px;letter-spacing:-0.02em;color:var(--ink);line-height:1.25}
+  .cause .t em{font-style:normal;color:var(--clay);font-weight:700}
+  .cause .pin{font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);padding:6px 12px;border:1px solid var(--rule);border-radius:999px}
+  .cause.dim{opacity:.5}
+  .cause.dim .pin{border-color:var(--muted);color:var(--muted)}
+  .cause.lit{border-color:var(--clay);background:rgba(194,90,58,.06)}
+  .cause.lit .pin{border-color:var(--clay);color:var(--clay)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TILES (five pillars navigation)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-tiles{position:absolute;inset:0;box-sizing:border-box;
+    padding:96px 72px;display:flex;flex-direction:column;justify-content:center;gap:36px}
+  .s-tiles .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-tiles h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:1000px;color:var(--ink)}
+  .s-tiles h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .tile-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+  .tile{border:1px solid var(--rule);border-radius:12px;padding:22px 20px 20px;background:rgba(255,252,240,.4);
+    display:flex;flex-direction:column;gap:10px;min-height:224px;position:relative;overflow:hidden;transition:all .25s}
+  .tile .tile-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:flex-start;color:var(--muted)}
+  .tile .tile-tag{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.22em;
+    font-size:10.5px;font-weight:600;color:var(--muted)}
+  .tile .tile-title{font-weight:600;font-size:22px;letter-spacing:-0.018em;color:var(--ink-2);line-height:1.15;margin-top:auto}
+  .tile .tile-desc{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .tile.lit{background:rgba(194,90,58,.07);border-color:var(--clay)}
+  .tile.lit .tile-icon{color:var(--clay)}
+  .tile.lit .tile-tag{color:var(--clay)}
+  .tile.lit .tile-title{color:var(--ink)}
+  .tile.lit .tile-desc{color:var(--ink-2)}
+  .tile .tile-n{position:absolute;top:16px;right:18px;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.16em;color:var(--muted);font-weight:600}
+  .tile.lit .tile-n{color:var(--clay)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TABLES
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-table{position:absolute;inset:0;box-sizing:border-box;padding:84px 96px 72px;
+    display:flex;flex-direction:column;gap:20px}
+  .s-table .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-table h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:900px;color:var(--ink)}
+  .s-table h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-table .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .tbl{display:grid;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .tbl .row{display:grid;padding:18px 0;border-bottom:1px solid rgba(201,191,164,.45)}
+  .tbl .row:last-child{border-bottom:none}
+  .tbl .row.head{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);font-weight:600}
+  .tbl.c3 .row{grid-template-columns:1.4fr 1fr 1fr;gap:32px}
+  .tbl.c2 .row{grid-template-columns:1.2fr 1fr;gap:40px}
+  .tbl .cell{font-size:17px;line-height:1.35;color:var(--ink-2);align-self:center}
+  .tbl .cell.k{color:var(--ink);font-weight:500}
+  .tbl .cell em{font-style:normal;color:var(--clay);font-weight:700}
+  .tbl .cell .good{color:var(--sage);font-weight:600}
+  .tbl .cell .bad{color:var(--clay);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · FILE TREE
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-tree{position:absolute;inset:0;box-sizing:border-box;padding:84px 96px 72px;
+    display:flex;flex-direction:column;gap:28px}
+  .s-tree .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-tree h2{font-weight:600;font-size:34px;letter-spacing:-0.028em;line-height:1.1;max-width:960px;color:var(--ink)}
+  .s-tree h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-tree .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .tree-box{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;gap:40px}
+  .tree{font-family:"Geist Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.65;
+    color:var(--ink-2);background:rgba(255,252,240,.46);border:1px solid var(--rule);border-radius:10px;
+    padding:22px 30px 24px;min-width:540px;position:relative}
+  .tree .hdr{position:absolute;top:-11px;left:24px;background:var(--paper);padding:0 10px;
+    font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .tree .dir{color:var(--clay);font-weight:600}
+  .tree .file{color:var(--ink-2)}
+  .tree .muted{color:var(--muted)}
+  .tree .hl{background:rgba(217,164,65,.2);padding:0 4px;border-radius:2px}
+  .tree-side{display:flex;flex-direction:column;gap:22px;max-width:300px}
+  .tree-side .item{font-size:14.5px;line-height:1.55;color:var(--ink-2)}
+  .tree-side .item b{color:var(--ink);font-weight:600;display:block;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);margin-bottom:4px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · FOUR GRID (hooks)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-four{position:absolute;inset:0;box-sizing:border-box;padding:84px 72px 72px;
+    display:flex;flex-direction:column;gap:22px}
+  .s-four .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-four h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:920px;color:var(--ink)}
+  .s-four h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-four .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .four-grid{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;min-height:0}
+  .four-grid .cell{border:1px solid var(--rule);border-radius:12px;padding:24px 22px;
+    background:rgba(255,252,240,.4);display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden}
+  .four-grid .cell::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--clay)}
+  .four-grid .cell .word{font-weight:600;font-size:30px;letter-spacing:-0.02em;color:var(--ink);line-height:1}
+  .four-grid .cell .desc{font-size:14px;color:var(--ink-2);line-height:1.5}
+  .four-grid .cell .ex{margin-top:auto;font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
+    letter-spacing:.12em;color:var(--rust);background:rgba(194,90,58,.08);padding:6px 10px;border-radius:4px;line-height:1.3}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · THREE-ROW (context mitigations)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .three-row{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .three-row .cell{border:1px solid var(--rule);border-radius:12px;padding:28px;background:rgba(255,252,240,.4);
+    display:flex;flex-direction:column;gap:14px;min-height:260px}
+  .three-row .cell .tile-icon{width:52px;height:52px;display:flex;align-items:center;color:var(--clay)}
+  .three-row .cell .tile-tag{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.22em;font-size:11px;font-weight:600;color:var(--clay)}
+  .three-row .cell h3{font-weight:600;font-size:24px;letter-spacing:-0.018em;color:var(--ink);margin-top:auto}
+  .three-row .cell p{font-size:14px;color:var(--ink-2);line-height:1.55}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · CHECKLIST
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-check{position:absolute;inset:0;box-sizing:border-box;padding:84px 120px 72px;
+    display:flex;flex-direction:column;justify-content:center;gap:20px}
+  .s-check .eyebrow{margin-bottom:0}
+  .s-check h2{font-weight:600;font-size:40px;letter-spacing:-0.028em;line-height:1.1;max-width:900px;color:var(--ink)}
+  .s-check h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-check ol{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-direction:column;gap:8px;counter-reset:c}
+  .s-check li{counter-increment:c;display:grid;grid-template-columns:52px 1fr;gap:22px;align-items:baseline;
+    padding:16px 0;border-bottom:1px solid rgba(201,191,164,.4)}
+  .s-check li:last-child{border-bottom:none}
+  .s-check li::before{content:"0" counter(c);font-family:"Geist Mono",ui-monospace,monospace;font-weight:600;
+    font-size:14px;color:var(--clay);letter-spacing:.1em}
+  .s-check li p{font-weight:500;font-size:22px;line-height:1.3;letter-spacing:-0.016em;color:var(--ink);max-width:900px}
+  .s-check li p em{font-style:normal;color:var(--clay);font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · ANTI-PATTERN CARD
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-ap{position:absolute;inset:0;box-sizing:border-box;padding:84px 96px 72px;
+    display:flex;flex-direction:column;gap:24px}
+  .s-ap .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-ap .ap-n{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--clay);font-weight:600;margin-bottom:10px}
+  .s-ap h2{font-weight:600;font-size:52px;letter-spacing:-0.032em;line-height:1.05;color:var(--ink);max-width:1000px}
+  .s-ap h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-ap .body{flex:1;display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:center;min-height:0}
+  .s-ap .body p{font-size:19px;line-height:1.55;color:var(--ink-2);max-width:660px}
+  .s-ap .body p + p{margin-top:14px}
+  .s-ap .body p b{color:var(--ink);font-weight:600}
+  .s-ap .body p em{font-style:normal;color:var(--clay);font-weight:600}
+  .s-ap .art{display:flex;align-items:center;justify-content:center}
+  .s-ap .art svg{width:100%;max-width:360px;height:auto}
+  .s-ap .punch{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--clay);font-weight:600;
+    border-top:2px solid var(--clay);padding-top:14px;max-width:900px;line-height:1.7}
+  .s-ap .punch em{font-style:normal;color:var(--ink);font-weight:700}
+
+  /* Chapter opener (section-card) */
+  .s-chap{position:absolute;inset:0;box-sizing:border-box;
+    display:flex;flex-direction:column;justify-content:center;padding:120px;gap:26px}
+  .s-chap .num{font-family:"Geist Mono",ui-monospace,monospace;font-size:120px;line-height:.9;
+    letter-spacing:-0.04em;font-weight:700;color:var(--clay);font-feature-settings:"tnum"}
+  .s-chap .kicker{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;letter-spacing:.3em;
+    text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:-8px}
+  .s-chap h2{font-weight:600;font-size:84px;letter-spacing:-0.038em;line-height:1;color:var(--ink);max-width:1040px}
+  .s-chap h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-chap .sub{margin-top:16px;font-size:22px;color:var(--ink-2);max-width:800px;line-height:1.4;letter-spacing:-0.012em}
+  .s-chap .sub em{font-style:normal;color:var(--clay);font-weight:600}
+  .dark .s-chap h2{color:#e6eef7}
+  .dark .s-chap .sub{color:#c9bfa4}
+  .dark .s-chap .kicker{color:#5e7ba2}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · STACK (two AGENTS.md)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-stack{position:absolute;inset:0;box-sizing:border-box;padding:84px 80px 64px;
+    display:flex;flex-direction:column;gap:22px}
+  .s-stack .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-stack h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;max-width:900px;color:var(--ink)}
+  .s-stack h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-stack .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .md-pair{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:28px;min-height:0}
+  .md-card{border:1px solid var(--rule);border-radius:12px;padding:22px 26px;
+    background:rgba(255,252,240,.4);display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+  .md-card .head{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+  .md-card .head h3{font-weight:600;font-size:17px;color:var(--ink)}
+  .md-card .head .tag{font-family:"Geist Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--muted);font-weight:600}
+  .md-card.bad .head .tag{color:var(--clay);font-weight:700}
+  .md-card.good .head .tag{color:var(--sage);font-weight:700}
+  .md-card .body{flex:1;overflow:hidden;font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;line-height:1.8;color:var(--ink-3)}
+  .md-card.bad .body p{opacity:.85;position:relative}
+  .md-card.bad .body p::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(194,90,58,.55)}
+  .md-card .body .cmt{color:var(--muted);font-style:italic}
+  .md-card .body .hl{color:var(--clay);font-weight:600}
+  .md-card.good .body p{padding:3px 0}
+  .md-card .foot{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--muted);padding-top:10px;border-top:1px solid var(--rule)}
+  .md-card.bad .foot{color:var(--clay);font-weight:600}
+  .md-card.good .foot{color:var(--sage);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · STAT INLINE (small, 1-liner)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-inline{position:absolute;inset:0;box-sizing:border-box;padding:120px 160px;
+    display:flex;flex-direction:column;justify-content:center;gap:22px}
+  .s-inline .eyebrow{margin-bottom:6px}
+  .s-inline .line{font-weight:500;font-size:40px;line-height:1.2;letter-spacing:-0.026em;color:var(--ink);max-width:1040px}
+  .s-inline .line b{color:var(--ink);font-weight:700}
+  .s-inline .line em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-inline .src{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);margin-top:12px}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     FRAGMENTS
+  ═══════════════════════════════════════════════════════════════════════ */
+  .reveal .fragment{opacity:0;transform:none;transition:opacity .5s ease-out, transform .5s ease-out}
+  .reveal .fragment.visible{opacity:1}
+  .reveal .fragment.rise{transform:translateY(10px)}
+  .reveal .fragment.rise.visible{transform:translateY(0)}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     REVEAL CONTROLS
+  ═══════════════════════════════════════════════════════════════════════ */
+  .reveal .controls{
+    color:var(--ink);
+    z-index:10000 !important;
+    pointer-events:auto !important;
+  }
+  .reveal .controls button{pointer-events:auto !important}
+  .reveal .progress{color:var(--clay);background:rgba(217,207,181,.15)}
+  .reveal .slide-number{background:transparent;color:#d9cfb5;font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:.18em}
+
+  /* ─── Salesforce-style bio / handoff slide ─────────────────────────────── */
+  .reveal .slides section.bio{
+    background:#cfe9fe !important;
+    color:#032e61;
+    overflow:hidden;
+  }
+  .reveal .slides section.bio::before,
+  .reveal .slides section.bio::after{display:none}
+  .reveal .slides section.bio .bio-stage{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family:"Geist",sans-serif;
+    color:#0a2a4f;
+    pointer-events:none;
+  }
+  .reveal .slides section.bio .sf-cloud{
+    position:absolute; top:36px; right:48px; width:96px; height:auto; display:block;
+    z-index:2; pointer-events:none;
+  }
+  .reveal .slides section.bio .sparkles{
+    position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+    z-index:1;
+  }
+  .reveal .slides section.bio .bio-stage{ z-index:3 }
+  .reveal .slides section.bio .avatar{
+    width:300px; height:300px; border-radius:50%;
+    background:#a9c5e3;
+    box-shadow:0 12px 32px rgba(3,46,97,.18);
+    overflow:hidden; position:relative; margin-top:-32px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reveal .slides section.bio .avatar img{
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .reveal .slides section.bio .avatar .initials{
+    font-family:"Geist",sans-serif; font-weight:700;
+    font-size:88px; letter-spacing:-2px; color:#cfe9fe;
+    background:linear-gradient(135deg,#1c4f8b 0%,#2d6cb6 100%);
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reveal .slides section.bio .name{
+    margin-top:48px; text-align:center;
+    font-weight:700; font-size:54px; letter-spacing:-1px;
+    color:#0a2a4f;
+  }
+  .reveal .slides section.bio .role{
+    margin-top:8px; text-align:center;
+    font-weight:400; font-size:30px; line-height:1.25;
+    color:#1c4f8b;
+  }
+
+  /* ─── Side-by-side "about me" variant ─────────────────────────────────── */
+  .reveal .slides section.bio.about{
+    color:#0a2a4f;
+  }
+  .reveal .slides section.bio.about .bio-stage{
+    flex-direction:row; gap:80px;
+    align-items:center; justify-content:center;
+    padding:0 120px;
+  }
+  .reveal .slides section.bio.about .avatar{
+    width:340px; height:340px; flex:0 0 340px; margin-top:0;
+    display:block; position:relative; overflow:hidden; border-radius:50%;
+  }
+  .reveal .slides section.bio.about .avatar img{
+    position:absolute; inset:0;
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .reveal .slides section.bio.about .about-copy{
+    flex:1 1 auto; max-width:540px;
+    display:flex; flex-direction:column; gap:14px;
+    color:#0a2a4f; text-align:left;
+  }
+  .reveal .slides section.bio.about .about-copy .eyebrow{
+    font-family:"Geist Mono",monospace;
+    font-size:13px; font-weight:700; letter-spacing:3.6px;
+    color:#0f7aff; text-transform:uppercase; margin-bottom:4px;
+  }
+  .reveal .slides section.bio.about .about-copy .name{
+    margin:0; text-align:left;
+    font-size:46px; line-height:1.05; letter-spacing:-1.2px;
+    font-weight:700; color:#001e5b;
+  }
+  .reveal .slides section.bio.about .about-copy .role{
+    margin:0 0 8px; text-align:left;
+    font-size:22px; line-height:1.3; font-weight:500;
+    color:#1c4f8b;
+  }
+  .reveal .slides section.bio.about .about-copy ul{
+    list-style:none; padding:0; margin:8px 0 0;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .reveal .slides section.bio.about .about-copy li{
+    position:relative; padding-left:26px;
+    font-size:20px; line-height:1.4; color:#0a2a4f;
+  }
+  .reveal .slides section.bio.about .about-copy li::before{
+    content:"·"; position:absolute; left:8px; top:-3px;
+    font-family:"Geist Mono",monospace; font-weight:700;
+    font-size:24px; color:#0f7aff;
+  }
+  .reveal .slides section.bio .handoff-eyebrow{
+    position:absolute; top:140px; left:0; right:0;
+    text-align:center;
+    font-family:"Geist Mono",monospace;
+    font-size:13px; font-weight:700; letter-spacing:3.6px;
+    color:#0f7aff;
+    text-transform:uppercase;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · MOTHERBOARD (chip + zones)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-board{position:absolute;inset:0;box-sizing:border-box;
+    padding:64px 72px 56px;display:flex;flex-direction:column;gap:18px}
+  .s-board .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-board h2{font-weight:600;font-size:42px;line-height:1.08;letter-spacing:-0.028em;color:var(--ink);max-width:820px}
+  .s-board h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-board .eyebrow{margin-bottom:14px}
+  .s-board .figref{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.22em;
+    font-weight:500;text-transform:uppercase;color:var(--ink-2);align-self:flex-end;white-space:nowrap}
+  .board-wrap{flex:1;display:grid;grid-template-columns:160px 1fr 160px;align-items:center;gap:14px;margin-top:4px;min-height:0}
+  .side-labels{display:flex;flex-direction:column;gap:48px}
+  .side-labels.right{align-items:flex-start}
+  .side-labels.left{align-items:flex-end;text-align:right}
+  .label-block{font-size:13.5px;line-height:1.4;color:var(--ink-2);max-width:160px;font-weight:400}
+  .label-block .tag{display:block;font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.18em;font-size:10.5px;color:var(--clay);font-weight:700;margin-bottom:5px}
+  .label-block .txt{color:var(--ink-2);font-size:13.5px;font-weight:400;letter-spacing:-0.005em}
+  .board-svg{width:100%;height:100%;max-height:420px}
+  .s-board .footline{text-align:center;font-weight:500;font-size:22px;color:var(--ink);letter-spacing:-0.018em}
+  .s-board .footline em{color:var(--clay);font-style:normal;font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · TWO-COLUMN HERO (poet doing taxes etc.)
+  ═══════════════════════════════════════════════════════════════════════ */
+  .s-figure{position:absolute;inset:0;box-sizing:border-box;
+    padding:84px 96px 64px;display:flex;flex-direction:column;gap:22px}
+  .s-figure .top{display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+  .s-figure h2{font-weight:600;font-size:38px;letter-spacing:-0.028em;line-height:1.1;color:var(--ink);max-width:880px}
+  .s-figure h2 em{font-style:normal;color:var(--clay);font-weight:700}
+  .s-figure .body{flex:1;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;min-height:0}
+  .s-figure .art{display:flex;align-items:center;justify-content:center}
+  .s-figure .art svg{width:100%;height:100%;max-height:440px}
+  .s-figure .art img{width:100%;height:100%;max-height:440px;object-fit:contain}
+  .s-figure .copy p{font-size:21px;line-height:1.5;color:var(--ink-2);margin:0 0 14px;max-width:580px}
+  .s-figure .copy p b{color:var(--ink);font-weight:600}
+  .s-figure .copy p em{font-style:normal;color:var(--clay);font-weight:600}
+  .s-figure .copy .punch{font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:34px;line-height:1.2;color:var(--ink);letter-spacing:-.005em;max-width:520px}
+  .s-figure .copy .punch em{font-style:italic;color:var(--clay);font-weight:600}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT · PILLAR SPLIT (55 / 45) — used for Ch 6 zone walks
+     LEFT  = the beat: provocation, headline, body
+     RIGHT = the persistent agent canvas, evolving slide to slide
+  ═══════════════════════════════════════════════════════════════════════ */
+  .ps-shell{position:absolute;top:60px;left:56px;right:56px;bottom:36px;
+    display:grid;grid-template-columns:55fr 45fr;gap:36px;align-items:stretch;min-height:0;}
+  .ps-left{display:flex;flex-direction:column;gap:18px;padding-right:8px;min-width:0;justify-content:flex-start;}
+  .ps-right{display:flex;flex-direction:column;gap:10px;min-width:0;border-left:1px solid var(--rule);padding-left:32px}
+
+  .ps-eyebrow{font-family:"Geist Mono",ui-monospace,monospace;text-transform:uppercase;
+    letter-spacing:.28em;font-size:11px;font-weight:700;color:var(--clay);}
+  .ps-eyebrow.warn{color:var(--mustard-deep)}
+  .ps-eyebrow.calm{color:var(--teal)}
+  .ps-prompt{display:inline-flex;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;
+    background:rgba(255,140,0,.12);border:1px solid rgba(200,91,0,.35);
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--mustard-deep);font-weight:700;}
+  .ps-prompt::before{content:"●";color:var(--mustard);font-size:9px;animation:ps-prompt-blink 1.6s ease-in-out infinite}
+  @keyframes ps-prompt-blink{0%,100%{opacity:.3}50%{opacity:1}}
+  .ps-headline{font-family:"Geist",sans-serif;font-weight:700;font-size:56px;line-height:1.02;
+    letter-spacing:-0.034em;color:var(--ink);}
+  .ps-headline em{font-style:normal;color:var(--clay);font-weight:800}
+  .ps-headline.warn em{color:var(--mustard-deep)}
+  .ps-sub{font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:22px;line-height:1.4;color:var(--ink-2);letter-spacing:-.005em;max-width:560px}
+  .ps-sub em{color:var(--clay);font-style:italic;font-weight:600}
+  .ps-body{font-family:"Geist",sans-serif;font-weight:500;font-size:18px;line-height:1.55;
+    color:var(--ink-2);letter-spacing:-.003em;max-width:580px}
+  .ps-body b{color:var(--ink);font-weight:600}
+  .ps-body em{color:var(--clay);font-style:normal;font-weight:600}
+
+  .ps-canvas-cap{font-family:"Geist Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:baseline;
+    justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+  .ps-canvas-cap .step{color:var(--clay)}
+  .ps-canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;
+    background:linear-gradient(180deg,#eaf3fc 0%, var(--paper-3) 100%);
+    border:1px solid var(--rule);border-radius:10px;padding:14px;}
+  .ps-canvas svg{width:100%;height:auto;max-height:100%}
+  .ps-canvas-foot{font-family:"Newsreader",Georgia,serif;font-style:italic;font-weight:500;
+    font-size:14px;line-height:1.35;color:var(--ink-2);text-align:center;letter-spacing:-.003em;}
+  .ps-canvas-foot em{color:var(--clay);font-style:italic;font-weight:600}
+
+  /* Persistent canvas: pulse animations for context-zone halos */
+  @keyframes p1-ctx-pulse{
+    0%,100%{ stroke-opacity:.45; stroke-width:1.6 }
+    50%{ stroke-opacity:1; stroke-width:2.6 }
+  }
+  .p1-ctx-pulse{ animation:p1-ctx-pulse 2.4s ease-in-out infinite; transform-box:fill-box; transform-origin:center }
+  @keyframes p1-token-drift{
+    0%{ opacity:.15; transform:translateY(0) }
+    50%{ opacity:.85; transform:translateY(-2px) }
+    100%{ opacity:.15; transform:translateY(0) }
+  }
+  .p1-token-bloat rect{ animation:p1-token-drift 1.8s ease-in-out infinite }
+  .p1-token-bloat rect:nth-child(2){ animation-delay:.2s }
+  .p1-token-bloat rect:nth-child(3){ animation-delay:.4s }
+  .p1-token-bloat rect:nth-child(4){ animation-delay:.6s }
+  .p1-token-bloat rect:nth-child(5){ animation-delay:.8s }
+  .p1-token-bloat rect:nth-child(6){ animation-delay:1.0s }
+
+  /* Pillar pill that lands in a context zone */
+  .p1-pill-land{ animation:p1-pill-pop .9s ease-out both }
+  @keyframes p1-pill-pop{
+    0%{ opacity:0; transform:translateY(8px) scale(.92) }
+    70%{ opacity:1; transform:translateY(-1px) scale(1.02) }
+    100%{ opacity:1; transform:translateY(0) scale(1) }
+  }
+
+</style>
+</head>
+
+<body>
+
+<div class="reveal">
+  <div class="slides">
+
+    <!-- slide 01 · TITLE -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · TITLE</div>
+        <div class="right"><span>v1 · 2026</span><span class="folio">01</span></div>
+      </div>
+
+      <div class="s-title" style="padding:80px 120px;gap:18px;justify-content:center">
+        <div class="eyebrow">Tech talk · DeveloperWeek 2026</div>
+        <h1 style="font-size:62px;line-height:1.0;max-width:1080px">How I Refactored a <em>Legacy</em> Codebase With Ralph That Was Estimated to Cost <em>1 Dev Month</em></h1>
+        <div class="sub" style="margin-top:6px">~450k lines, handed to an <em>autonomous agent loop</em> instead. What it took, and what held the quality.</div>
+        <div class="byline" style="margin-top:24px">
+          <span class="bar"></span>
+          <span><b>Tuhin Kanti Sharma</b> · Principal Software Engineer, Development Experience</span>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:40px;flex-wrap:wrap;font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.01em">
+          <a href="https://www.linkedin.com/in/tuhin-kanti-sharma/" style="color:var(--clay);text-decoration:none;display:inline-flex;align-items:baseline;gap:10px">
+            <span style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700">LinkedIn</span><span>linkedin.com/in/tuhin-kanti-sharma</span>
+          </a>
+          <a href="https://github.com/tuhinkanti/developerweek2026-ralph-demo" style="color:var(--clay);text-decoration:none;display:inline-flex;align-items:baseline;gap:10px">
+            <span style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700">Demo repo</span><span>github.com/tuhinkanti/developerweek2026-ralph-demo</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="sig">FIG. 00 · COVER</div>
+
+      <aside class="notes">
+        Hi, I'm Tuhin Sharma, a Principal Software Engineer. Today I'm going to walk through how I refactored a large legacy codebase using Ralph — an autonomous agent loop. We estimated this refactor at about a developer-month for someone who knew the code. I'm going to show you how the agent did it instead, what made it actually work, and where the quality bar was held.
+      </aside>
+    </section>
+
+    <!-- slide 02 · ABOUT ME -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · ABOUT ME</div>
+        <div class="right"><span>About the speaker</span><span class="folio">02</span></div>
+      </div>
+
+      <div style="position:absolute;inset:96px 80px 80px;display:grid;grid-template-columns:380px 1fr;gap:72px;align-items:center">
+        <div style="width:380px;height:440px;border-radius:28px;overflow:hidden;background:#e5f1fc;border:1px solid var(--rule);box-shadow:0 16px 40px rgba(0,30,91,.14)">
+          <img src="../images/tuhin.jpg" alt="Tuhin Kanti Sharma" style="width:100%;height:100%;object-fit:cover;display:block"/>
+        </div>
+
+        <div style="max-width:650px">
+          <div class="eyebrow">About me</div>
+          <h2 style="font-family:Geist,sans-serif;font-size:58px;line-height:1.02;letter-spacing:-1.8px;margin:0 0 14px;color:var(--ink)">Tuhin Kanti Sharma</h2>
+          <div style="font-size:25px;line-height:1.3;color:var(--ink-3);margin-bottom:34px">Principal Software Engineer, Development Experience · Salesforce</div>
+
+          <ul style="padding-left:28px;margin:0;display:grid;gap:14px;font-size:22px;line-height:1.3;color:var(--ink-2)">
+            <li>20+ years building enterprise software.</li>
+            <li>Currently building the Next Gen Feature Flags platform.</li>
+            <li>Jumped onto the AI bandwagon early — building background agents.</li>
+            <li>Builds coding agents to automate developer workflows — and is having a lot of fun.</li>
+            <li>External talks: DeveloperWeek 2026, CNCF gRPC Conf 2020, and UtahGeekEvents.</li>
+          </ul>
+        </div>
+      </div>
+
+      <aside class="notes">
+        Quick about-me. I'm a Principal Software Engineer in Development Experience at Salesforce, with more than twenty years in enterprise software. I'm currently building the Next Gen Feature Flags platform. I jumped onto the AI bandwagon early — started building background agents — and I build coding agents to automate developer workflows. Honestly, I'm having a lot of fun with it.
+      </aside>
+    </section>
+
+    <!-- slide 03 · AGENDA -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · AGENDA</div>
+        <div class="right"><span>What we will cover</span><span class="folio">03</span></div>
+      </div>
+
+      <div style="position:absolute;inset:104px 120px 84px;display:grid;grid-template-columns:0.85fr 1.15fr;gap:64px;align-items:center">
+        <div>
+          <div class="eyebrow">Agenda</div>
+          <h2 style="font-family:Geist,sans-serif;font-size:64px;line-height:1.02;letter-spacing:-2.2px;margin:0;color:var(--ink)">From small tasks to a <em style="color:var(--clay);font-style:normal">month-long refactor.</em></h2>
+        </div>
+
+        <ol style="list-style:none;counter-reset:agenda;padding:0;margin:0;display:grid;gap:13px">
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">01</span>
+            <span style="font-size:23px;line-height:1.22;color:var(--ink-2)">Coding agents — and the task horizon</span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">02</span>
+            <span style="font-size:23px;line-height:1.22;color:var(--ink-2)">What is <em style="color:var(--clay);font-style:normal">context rot?</em></span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">03</span>
+            <span style="font-size:23px;line-height:1.22;color:var(--ink-2)">What is the <em style="color:var(--clay);font-style:normal">Ralph loop?</em></span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">04</span>
+            <span style="font-size:23px;line-height:1.22;color:var(--ink-2)">How does the Ralph loop work?</span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">05</span>
+            <span style="font-size:23px;line-height:1.22;color:var(--ink-2)">Refactoring the legacy codebase with Ralph</span>
+          </li>
+          <li style="counter-increment:agenda;display:grid;grid-template-columns:54px 1fr;gap:18px;align-items:start">
+            <span style="font-family:Geist Mono,monospace;font-size:18px;font-weight:700;color:var(--clay)">06</span>
+            <span style="font-size:23px;line-height:1.22;color:var(--ink-2)">Key takeaways</span>
+          </li>
+        </ol>
+      </div>
+
+      <aside class="notes">
+        Here's the arc. We start with coding agents and the idea of a task horizon — what they're good at today. Then context rot: why long-running agents get unreliable. Then the Ralph loop as the fix, and how it actually works. Then the real story — refactoring our legacy codebase with it. And we close with the key takeaways.
+      </aside>
+    </section>
+
+    <!-- slide 04 · CH1 OPENER -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">04</span></div>
+      </div>
+      <div class="s-chap">
+        <div class="kicker">Chapter one</div>
+        <div class="num">01</div>
+        <h2>Coding <em>Agents.</em></h2>
+        <div class="sub">They're remarkable on small tasks. The interesting question is what happens when the task gets big.</div>
+      </div>
+      <aside class="notes">
+        Chapter one. Let's start with where coding agents are today — they're genuinely great at a certain shape of work. The whole talk hinges on understanding exactly what that shape is, and what breaks when you push past it.
+      </aside>
+    </section>
+
+    <!-- slide 05 · ERA OF CODING AGENTS · pipeline -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>The era of coding agents</span><span class="folio">05</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow">Automate code generation</div>
+            <h2>We are in the era of <em>coding agents.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <svg viewBox="0 0 1080 380" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <marker id="r-arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                <path d="M0 0 L10 5 L0 10 z" fill="#0f7aff"/>
+              </marker>
+            </defs>
+
+            <!-- developer -->
+            <g transform="translate(20 130)">
+              <circle cx="60" cy="60" r="54" fill="#001e5b"/>
+              <circle cx="60" cy="44" r="18" fill="#cfe9fe"/>
+              <path d="M30 92 C30 64 90 64 90 92 Z" fill="#cfe9fe"/>
+              <text x="60" y="140" text-anchor="middle" font-family="Geist Mono,monospace" font-size="11" font-weight="700" letter-spacing="2" fill="#001e5b">DEVELOPER</text>
+            </g>
+
+            <!-- agent tools cluster -->
+            <g transform="translate(190 100)">
+              <rect x="0" y="0" width="180" height="180" rx="12" fill="#e6eef7" stroke="#0a2a4f" stroke-width="1.2"/>
+              <text x="90" y="26" text-anchor="middle" font-family="Geist Mono,monospace" font-size="10" font-weight="700" letter-spacing="2" fill="#0f7aff">· CODING AGENTS</text>
+              <g font-family="Geist,sans-serif" font-size="15" font-weight="600" fill="#032e61">
+                <text x="24" y="68">Cursor</text>
+                <text x="24" y="104">Claude Code</text>
+                <text x="24" y="140">Codex</text>
+              </g>
+              <g fill="#0f7aff"><circle cx="158" cy="62" r="4"/><circle cx="158" cy="98" r="4"/><circle cx="158" cy="134" r="4"/></g>
+            </g>
+
+            <line x1="118" y1="190" x2="186" y2="190" stroke="#0f7aff" stroke-width="1.8" marker-end="url(#r-arr)"/>
+            <line x1="374" y1="190" x2="430" y2="190" stroke="#0f7aff" stroke-width="1.8" marker-end="url(#r-arr)"/>
+
+            <!-- lifecycle stages -->
+            <g transform="translate(440 150)">
+              <g font-family="Geist,sans-serif" font-size="14" font-weight="600" fill="#001e5b" text-anchor="middle">
+                <g><rect x="0" y="0" width="110" height="56" rx="8" fill="#fff" stroke="#0a2a4f" stroke-width="1.1"/><text x="55" y="33">Specs</text></g>
+                <g transform="translate(124 0)"><rect x="0" y="0" width="110" height="56" rx="8" fill="#fff" stroke="#0a2a4f" stroke-width="1.1"/><text x="55" y="33">Coding</text></g>
+                <g transform="translate(248 0)"><rect x="0" y="0" width="110" height="56" rx="8" fill="#fff" stroke="#0a2a4f" stroke-width="1.1"/><text x="55" y="33">Testing</text></g>
+                <g transform="translate(372 0)"><rect x="0" y="0" width="120" height="56" rx="8" fill="#fff" stroke="#0a2a4f" stroke-width="1.1"/><text x="60" y="33">Debugging</text></g>
+                <g transform="translate(506 0)"><rect x="0" y="0" width="124" height="56" rx="8" fill="#0f7aff" stroke="#0540ff" stroke-width="1.1"/><text x="62" y="33" fill="#fff">Deployment</text></g>
+              </g>
+              <g stroke="#0f7aff" stroke-width="1.8" marker-end="url(#r-arr)">
+                <line x1="110" y1="28" x2="122" y2="28"/>
+                <line x1="234" y1="28" x2="246" y2="28"/>
+                <line x1="358" y1="28" x2="370" y2="28"/>
+                <line x1="492" y1="28" x2="504" y2="28"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="footline">Automated tools — often powered by LLMs — that perform tasks <em>across the developer lifecycle:</em> specs, coding, testing, debugging, deployment.</div>
+      </div>
+
+      <aside class="notes">
+        We're squarely in the era of coding agents. Cursor, Claude Code, Codex — automated tools, usually powered by LLMs, that perform tasks across the whole developer lifecycle: writing specs, coding, testing, debugging, even deployment. They've become part of how we work.
+      </aside>
+    </section>
+
+    <!-- slide 06 · TASK HORIZON · small tasks -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>Task horizon</span><span class="folio">06</span></div>
+      </div>
+
+      <div class="s-list">
+        <div class="head">
+          <div>
+            <div class="eyebrow">Task horizon</div>
+            <h2>Coding agents work well on <em>smaller tasks.</em></h2>
+          </div>
+        </div>
+        <ol>
+          <li><p>Coding agents perform well on <b>small, well-scoped tasks</b>.</p></li>
+          <li><p>Tasks that typically span <b>a few minutes</b> of work.</p></li>
+          <li><p>They're ideal for <em>interactive pair programming</em> with a human in the loop.</p></li>
+        </ol>
+      </div>
+
+      <aside class="notes">
+        Here's the key constraint. Coding agents are at their best on small, well-scoped tasks — things that span a few minutes. They shine in interactive pair programming, where a human is right there steering. That's the sweet spot today. The task horizon is short.
+      </aside>
+    </section>
+
+    <!-- slide 07 · LEGACY CODEBASE STATS -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>Needs a longer horizon</span><span class="folio">07</span></div>
+      </div>
+
+      <div style="position:absolute;inset:96px 96px 80px;display:flex;flex-direction:column;gap:8px">
+        <div class="eyebrow">Needs a longer task horizon</div>
+        <h2 style="font-family:Geist,sans-serif;font-size:48px;line-height:1.05;letter-spacing:-1.6px;margin:0 0 12px;color:var(--ink)">Our legacy codebase, though, is <em style="color:var(--clay);font-style:normal">large.</em></h2>
+
+        <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:28px;min-height:0">
+          <div style="border:1.5px solid var(--rule);border-radius:16px;background:rgba(255,252,240,.42);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px">
+            <div style="font-family:Geist Mono,monospace;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:center">Built over 10+ years</div>
+            <div style="font-weight:700;font-size:110px;line-height:.9;letter-spacing:-3px;color:var(--ink)">10+</div>
+            <div style="font-size:16px;color:var(--ink-2);text-align:center">years of accumulated decisions</div>
+          </div>
+          <div style="border:1.5px solid var(--rule);border-radius:16px;background:rgba(255,252,240,.42);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px">
+            <div style="font-family:Geist Mono,monospace;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:center">~ 25 Bazel projects</div>
+            <div style="font-weight:700;font-size:110px;line-height:.9;letter-spacing:-3px;color:var(--ink)">25</div>
+            <div style="font-size:16px;color:var(--ink-2);text-align:center">modules wired together</div>
+          </div>
+          <div style="border:1.5px solid var(--clay);border-radius:16px;background:rgba(15,122,255,.05);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px">
+            <div style="font-family:Geist Mono,monospace;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);font-weight:700;text-align:center">~ Lines of code</div>
+            <div style="font-weight:700;font-size:92px;line-height:.9;letter-spacing:-3px;color:var(--clay)">450,000</div>
+            <div style="font-size:16px;color:var(--ink-2);text-align:center">far past a few-minute task</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        But the codebase I needed to refactor is the opposite of small. Built over more than ten years. Around twenty-five Bazel projects. Roughly four hundred and fifty thousand lines of code. This is not a few-minute task — it needs a much longer task horizon than agents are comfortable with.
+      </aside>
+    </section>
+
+    <!-- slide 08 · run for long -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 1</div>
+        <div class="right"><span>The hook</span><span class="folio">08</span></div>
+      </div>
+      <div class="s-big" style="padding:140px 160px">
+        <div class="rule"></div>
+        <div class="eyebrow">The tension</div>
+        <div class="line">Refactoring a large codebase needs the agent to <em>run for long.</em></div>
+        <div class="note">Small-task tool · large-task problem · the gap between them is where things break.</div>
+      </div>
+      <aside class="notes">
+        So here's the tension that drives the whole talk. Refactoring a large codebase requires the coding agent to run for a long time — many steps, lots of files. But the tool is tuned for short tasks. Close that gap naively and something breaks. That something has a name.
+      </aside>
+    </section>
+
+    <!-- slide 09 · CH2 OPENER -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">09</span></div>
+      </div>
+      <div class="s-chap">
+        <div class="kicker">Chapter two</div>
+        <div class="num">02</div>
+        <h2>What Is <em>Context Rot?</em></h2>
+        <div class="sub">Run an agent long enough and its own history turns against it.</div>
+      </div>
+      <aside class="notes">
+        Chapter two. The thing that breaks when you run an agent for a long time is context rot. Let's define it carefully, because the whole solution falls out of understanding it.
+      </aside>
+    </section>
+
+    <!-- slide 10 · fill up context -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Context rot</span><span class="folio">10</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow mustard">Context rot</div>
+            <h2>Long-running agents <em>fill up context.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <svg viewBox="0 0 1080 420" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="flowgrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#57a8ff"/><stop offset="1" stop-color="#0f7aff"/>
+              </linearGradient>
+            </defs>
+            <!-- pipe -->
+            <rect x="20" y="250" width="120" height="64" rx="10" fill="#1c4f8b"/>
+            <rect x="36" y="262" width="100" height="40" rx="6" fill="#0a2a4f"/>
+            <!-- flowing stream of docs -->
+            <path d="M140 282 C 320 282, 360 180, 620 180" fill="none" stroke="url(#flowgrad)" stroke-width="60" stroke-linecap="round" opacity=".28"/>
+            <g fill="#0f7aff" opacity=".85">
+              <rect x="190" y="270" width="16" height="20" rx="2"/>
+              <rect x="270" y="250" width="16" height="20" rx="2"/>
+              <rect x="360" y="216" width="16" height="20" rx="2"/>
+              <rect x="450" y="190" width="16" height="20" rx="2"/>
+              <rect x="540" y="176" width="16" height="20" rx="2"/>
+            </g>
+            <text x="240" y="306" font-family="Geist Mono,monospace" font-size="13" font-weight="700" letter-spacing="2" fill="#001e5b">DATA FLOW</text>
+
+            <!-- overflowing crate -->
+            <g transform="translate(660 110)">
+              <rect x="0" y="40" width="240" height="200" rx="6" fill="#c8a86a" stroke="#8a6a30" stroke-width="3"/>
+              <path d="M0 40 L240 40 L210 10 L30 10 Z" fill="#d9bd83" stroke="#8a6a30" stroke-width="3"/>
+              <!-- cracks -->
+              <path d="M60 90 L80 140 L70 200" fill="none" stroke="#8a6a30" stroke-width="2.4"/>
+              <path d="M180 80 L160 150 L185 220" fill="none" stroke="#8a6a30" stroke-width="2.4"/>
+              <text x="120" y="150" text-anchor="middle" font-family="Geist,sans-serif" font-size="26" font-weight="800" fill="#5a3f18" letter-spacing="1">LLM</text>
+              <text x="120" y="182" text-anchor="middle" font-family="Geist,sans-serif" font-size="22" font-weight="800" fill="#5a3f18" letter-spacing="1">CONTEXT</text>
+              <!-- spilling scrolls -->
+              <g fill="#f0e2c0" stroke="#8a6a30" stroke-width="2">
+                <rect x="40" y="-6" width="40" height="26" rx="6" transform="rotate(-12 60 6)"/>
+                <rect x="150" y="-10" width="44" height="26" rx="6" transform="rotate(10 170 2)"/>
+                <rect x="220" y="120" width="44" height="26" rx="6" transform="rotate(18 240 132)"/>
+                <rect x="-24" y="150" width="44" height="26" rx="6" transform="rotate(-16 0 162)"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div class="footline">As agents work through a large problem, they keep growing the underlying LLM context — <em>leading to context rot.</em></div>
+      </div>
+
+      <aside class="notes">
+        Here's the mechanism. As an agent works through a large problem, every step — every file it reads, every tool result, every bit of reasoning — gets appended to the underlying LLM context. The context just keeps growing. The crate overflows. That overflow is what we call context rot.
+      </aside>
+    </section>
+
+    <!-- slide 11 · what is context · definitions -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>Definitions</span><span class="folio">11</span></div>
+      </div>
+
+      <div class="s-tiles" style="padding-top:84px">
+        <div class="top">
+          <div>
+            <div class="eyebrow">Context is limited</div>
+            <h2>What is <em>context?</em></h2>
+          </div>
+        </div>
+        <div class="three-row">
+          <div class="cell">
+            <div class="tile-tag">· Context</div>
+            <h3>All the tokens the LLM can see</h3>
+            <p>Everything the model can look at to answer a question — the prompt, the history, the files, the tool output.</p>
+          </div>
+          <div class="cell">
+            <div class="tile-tag">· Context window</div>
+            <h3>How many tokens it can process</h3>
+            <p>The amount of tokens an LLM can take in and process at a time. It is finite — there is a hard ceiling.</p>
+          </div>
+          <div class="cell" style="border-color:var(--clay);background:rgba(15,122,255,.05)">
+            <div class="tile-tag">· Context rot</div>
+            <h3>Accuracy decays as it fills</h3>
+            <p>LLMs become <em style="color:var(--clay);font-style:normal;font-weight:600">less accurate as context length increases</em> — even before the window is full.</p>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        Three quick definitions. Context is all the tokens the LLM can see to answer a question. The context window is how many tokens it can process at a time — it's finite. And context rot is the important one: LLMs become less accurate as the context length increases. It's not just about overflowing the window — quality degrades well before that.
+      </aside>
+    </section>
+
+    <!-- slide 12 · hallucinate progression -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>The degradation</span><span class="folio">12</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow mustard">The degradation</div>
+            <h2>LLMs <em>hallucinate</em> as context grows — making agents unreliable.</h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <svg viewBox="0 0 1080 360" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <marker id="r-arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5e7ba2"/></marker>
+            </defs>
+            <!-- gradient bar -->
+            <g>
+              <rect x="30" y="20" width="320" height="44" rx="8" fill="#0f7aff"/>
+              <rect x="380" y="20" width="320" height="44" rx="8" fill="#ff8c00"/>
+              <rect x="730" y="20" width="320" height="44" rx="8" fill="#b3261e"/>
+              <text x="190" y="48" text-anchor="middle" font-family="Geist,sans-serif" font-size="17" font-weight="700" fill="#fff">Small Context</text>
+              <text x="540" y="48" text-anchor="middle" font-family="Geist,sans-serif" font-size="17" font-weight="700" fill="#fff">Growing Context</text>
+              <text x="890" y="48" text-anchor="middle" font-family="Geist,sans-serif" font-size="17" font-weight="700" fill="#fff">Large Context</text>
+            </g>
+
+            <!-- three stages -->
+            <g font-family="Geist,sans-serif" text-anchor="middle">
+              <!-- reliable -->
+              <g transform="translate(190 130)">
+                <rect x="-60" y="0" width="120" height="100" rx="14" fill="#cfe9fe" stroke="#0f7aff" stroke-width="2"/>
+                <circle cx="0" cy="44" r="22" fill="#0f7aff"/>
+                <path d="M-10 44 a10 6 0 0 0 20 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                <text x="0" y="138" font-size="20" font-weight="700" fill="#001e5b">Reliable Agent</text>
+                <text x="0" y="164" font-size="15" fill="#1c4f8b">Accurate &amp; Predictable</text>
+              </g>
+              <!-- unreliable -->
+              <g transform="translate(540 130)">
+                <rect x="-60" y="0" width="120" height="100" rx="14" fill="#ffe6c2" stroke="#ff8c00" stroke-width="2"/>
+                <circle cx="0" cy="44" r="22" fill="#ff8c00"/>
+                <path d="M-10 50 a10 6 0 0 1 20 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                <text x="20" y="30" font-size="22" font-weight="800" fill="#c85b00">?</text>
+                <text x="0" y="138" font-size="20" font-weight="700" fill="#001e5b">Unreliable Agent</text>
+                <text x="0" y="164" font-size="15" fill="#1c4f8b">Overwhelmed &amp; Distorted</text>
+              </g>
+              <!-- broken -->
+              <g transform="translate(890 130)">
+                <rect x="-60" y="0" width="120" height="100" rx="14" fill="#f6d2cf" stroke="#b3261e" stroke-width="2"/>
+                <circle cx="0" cy="44" r="22" fill="#b3261e"/>
+                <path d="M-12 36 l10 10 M-2 36 l-10 10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                <path d="M2 36 l10 10 M12 36 l-10 10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                <text x="0" y="138" font-size="20" font-weight="700" fill="#001e5b">Broken Agent</text>
+                <text x="0" y="164" font-size="15" fill="#1c4f8b">Hallucinating &amp; Unreliable</text>
+              </g>
+              <line x1="262" y1="180" x2="468" y2="180" stroke="#5e7ba2" stroke-width="1.6" marker-end="url(#r-arr2)"/>
+              <line x1="612" y1="180" x2="818" y2="180" stroke="#5e7ba2" stroke-width="1.6" marker-end="url(#r-arr2)"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="footline">Small context → <em>reliable.</em> Growing context → overwhelmed. Large context → hallucinating and broken.</div>
+      </div>
+
+      <aside class="notes">
+        And this is what it looks like in practice. With a small context the agent is reliable — accurate and predictable. As context grows it gets overwhelmed and distorted — answers start drifting. Push to a large context and it breaks: hallucinating, unreliable. So a naive long-running agent on a 450,000-line refactor lands squarely in the red zone.
+      </aside>
+    </section>
+
+    <!-- slide 13 · bridge -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 2</div>
+        <div class="right"><span>The bridge</span><span class="folio">13</span></div>
+      </div>
+      <div class="s-quote">
+        <div class="mark">&ldquo;</div>
+        <blockquote>So how do we let an agent run <em>long</em> without letting its context <em>rot?</em></blockquote>
+        <div class="attrib">The Ralph loop is the answer</div>
+      </div>
+      <aside class="notes">
+        So that's the puzzle. We need the agent to run long enough to finish a month-sized refactor, but context rot says the longer it runs, the worse it gets. The Ralph loop is how you get both: a long-running job, without a long-running context.
+      </aside>
+    </section>
+
+    <!-- slide 14 · CH3 OPENER -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">14</span></div>
+      </div>
+      <div class="s-chap">
+        <div class="kicker">Chapter three</div>
+        <div class="num">03</div>
+        <h2>What Is the <em>Ralph Loop?</em></h2>
+        <div class="sub">A surprisingly simple pattern for letting agents run longer.</div>
+      </div>
+      <aside class="notes">
+        Chapter three. The Ralph loop. The name sounds fancy; the idea is almost embarrassingly simple — and that's exactly why it works.
+      </aside>
+    </section>
+
+    <!-- slide 15 · Ralph loop pattern -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>Autonomous AI development pattern</span><span class="folio">15</span></div>
+      </div>
+
+      <div class="s-diagram">
+        <div class="top">
+          <div>
+            <div class="eyebrow">Autonomous AI development pattern</div>
+            <h2>The <em>Ralph loop.</em></h2>
+          </div>
+          <div class="figref"></div>
+        </div>
+
+        <div class="canvas">
+          <svg viewBox="0 0 1080 430" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <marker id="cyc" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#0f7aff"/></marker>
+            </defs>
+            <!-- circular arrows · ring centered at (540,245) r=140 -->
+            <circle cx="540" cy="245" r="140" fill="none" stroke="#a9c8e6" stroke-width="2" stroke-dasharray="5 7"/>
+            <path d="M540 105 A140 140 0 0 1 661 315" fill="none" stroke="#0f7aff" stroke-width="2.4" marker-end="url(#cyc)"/>
+            <path d="M661 315 A140 140 0 0 1 419 315" fill="none" stroke="#0f7aff" stroke-width="2.4" marker-end="url(#cyc)"/>
+            <path d="M419 315 A140 140 0 0 1 540 105" fill="none" stroke="#0f7aff" stroke-width="2.4" marker-end="url(#cyc)"/>
+
+            <!-- node 1 top · label sits above the circle (top edge y=65) -->
+            <text x="540" y="36" text-anchor="middle" font-family="Geist,sans-serif" font-size="20" font-weight="700" fill="#001e5b">Iterate &amp; Improve</text>
+            <text x="540" y="56" text-anchor="middle" font-family="Newsreader,serif" font-size="14" font-style="italic" fill="#1c4f8b">Refine models, update strategy</text>
+            <g transform="translate(540 105)">
+              <circle r="40" fill="#001e5b"/>
+              <text y="8" text-anchor="middle" font-family="Geist Mono,monospace" font-size="24" font-weight="700" fill="#e6eef7">01</text>
+            </g>
+
+            <!-- node 2 bottom right · label to the right (right edge x=701) -->
+            <g transform="translate(661 315)">
+              <circle r="40" fill="#0f7aff"/>
+              <text y="8" text-anchor="middle" font-family="Geist Mono,monospace" font-size="24" font-weight="700" fill="#fff">02</text>
+            </g>
+            <text x="720" y="310" text-anchor="start" font-family="Geist,sans-serif" font-size="20" font-weight="700" fill="#001e5b">Code &amp; Execute</text>
+            <text x="720" y="332" text-anchor="start" font-family="Newsreader,serif" font-size="14" font-style="italic" fill="#1c4f8b">Generate code, run tasks</text>
+
+            <!-- node 3 bottom left · label to the left (left edge x=379) -->
+            <g transform="translate(419 315)">
+              <circle r="40" fill="#16d987"/>
+              <text y="8" text-anchor="middle" font-family="Geist Mono,monospace" font-size="24" font-weight="700" fill="#00173d">03</text>
+            </g>
+            <text x="360" y="310" text-anchor="end" font-family="Geist,sans-serif" font-size="20" font-weight="700" fill="#001e5b">Evaluate &amp; Learn</text>
+            <text x="360" y="332" text-anchor="end" font-family="Newsreader,serif" font-size="14" font-style="italic" fill="#1c4f8b">Analyze results, gather feedback</text>
+          </svg>
+        </div>
+
+        <div class="footline">Iterate &amp; improve → code &amp; execute → evaluate &amp; learn — <em>then go around again.</em></div>
+      </div>
+
+      <aside class="notes">
+        At its heart the Ralph loop is a three-step cycle. One: iterate and improve — refine the plan and strategy. Two: code and execute — generate code and run the task. Three: evaluate and learn — analyze the results and gather feedback. Then it goes around again. The trick is in how each turn of the loop is set up — which is the next slide.
+      </aside>
+    </section>
+
+    <!-- slide 16 · bash loop -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 3</div>
+        <div class="right"><span>It's just a loop</span><span class="folio">16</span></div>
+      </div>
+
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:36px">
+        <div class="eyebrow" style="color:var(--mustard)">Ralph is a bash loop</div>
+        <div style="background:#001226;border:1px solid #1c4f8b;border-radius:14px;padding:40px 44px;font-family:'Geist Mono',monospace;font-size:34px;line-height:1.4;color:#e6eef7;letter-spacing:-.5px">
+          <span style="color:#57a8ff">while</span> :; <span style="color:#57a8ff">do</span> <span style="color:#16d987">cat</span> PROMPT.md | agent ; <span style="color:#57a8ff">done</span>
+        </div>
+        <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-size:24px;color:#c9d6ea;line-height:1.4">
+          That's it. Feed the prompt to the agent, let it work, and <em style="color:var(--clay-soft);font-style:italic">do it again</em> — fresh, every time.
+        </div>
+        <div style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#7e9bc0">
+          Geoffrey Huntley · <a href="https://ghuntley.com/loop/" style="color:var(--clay-soft);text-decoration:none">ghuntley.com/loop</a>
+        </div>
+      </div>
+
+      <aside class="notes">
+        And here's the punchline. Ralph, in its purest form, is a bash loop: while true, cat the prompt file into the agent, done. This framing comes from Geoffrey Huntley. The profound part isn't the bash — it's that each iteration is a fresh invocation of the agent. The loop restarts the context every single time. Hold that thought.
+      </aside>
+    </section>
+
+    <!-- slide 17 · CH4 OPENER -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 4</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">17</span></div>
+      </div>
+      <div class="s-chap">
+        <div class="kicker">Chapter four</div>
+        <div class="num">04</div>
+        <h2>How Does It <em>Work?</em></h2>
+        <div class="sub">Small verifiable tasks, fresh context each time, learnings carried between runs.</div>
+      </div>
+      <aside class="notes">
+        Chapter four. Let's make this concrete — what does the loop actually consume, and why does fresh context defeat context rot?
+      </aside>
+    </section>
+
+    <!-- slide 18 · prd.json -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 4</div>
+        <div class="right"><span>The work list</span><span class="folio">18</span></div>
+      </div>
+
+      <div class="s-stack">
+        <div class="top">
+          <div>
+            <div class="eyebrow"><code style="font-family:'Geist Mono',monospace">prd.json</code> · small verifiable tasks for an agent to complete</div>
+            <h2>Break the refactor into <em>small, verifiable tasks.</em></h2>
+          </div>
+          <div class="figref">github.com/tuhinkanti/developerweek2026-ralph-demo</div>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:32px;min-height:0;align-items:center">
+          <div style="background:#001226;border:1px solid #1c4f8b;border-radius:12px;padding:24px 28px;font-family:'Geist Mono',monospace;font-size:14px;line-height:1.6;color:#e6eef7;overflow:hidden">
+<pre style="margin:0"><span style="color:#7e9bc0">{</span>
+  <span style="color:#57a8ff">"id"</span>: <span style="color:#16d987">"US-003"</span>,
+  <span style="color:#57a8ff">"title"</span>: <span style="color:#16d987">"Add conversion methods to LegacyTargetCode"</span>,
+  <span style="color:#57a8ff">"priority"</span>: <span style="color:#ff8c00">2</span>,
+  <span style="color:#57a8ff">"passes"</span>: <span style="color:#ff8c00">false</span>,
+  <span style="color:#57a8ff">"acceptance_criteria"</span>: [
+    <span style="color:#16d987">"Add toTargetKey() instance method ..."</span>,
+    <span style="color:#16d987">"Create TargetConverter utility class ..."</span>,
+    <span style="color:#16d987">"Add unit tests for round-trip conversion"</span>,
+    <span style="color:#16d987">"Existing tests must still pass"</span>
+  ]
+<span style="color:#7e9bc0">}</span></pre>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <div style="font-size:21px;line-height:1.5;color:var(--ink-2)">Each task is <b style="color:var(--ink)">tightly scoped</b> — one unit of work an agent can finish in a single pass.</div>
+            <div style="font-size:21px;line-height:1.5;color:var(--ink-2)">Each carries <b style="color:var(--ink)">acceptance criteria</b> the agent can check itself against.</div>
+            <div style="font-size:21px;line-height:1.5;color:var(--ink-2)"><code style="font-family:'Geist Mono',monospace;color:var(--clay)">"passes": false</code> until it's <em style="color:var(--clay);font-style:normal;font-weight:600">objectively done</em> — verifiable, not vibes.</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        The fuel for the loop is a backlog of small, verifiable tasks — I kept mine in a prd.json. Each entry is one tightly-scoped unit of work, like "add conversion methods to LegacyTargetCode," with explicit acceptance criteria, including that existing tests must still pass. And a passes flag that stays false until the task is objectively done. Verifiable, not vibes. That's the unit the agent picks up each turn.
+      </aside>
+    </section>
+
+    <!-- slide 19 · fresh context -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 4</div>
+        <div class="right"><span>Why it works</span><span class="folio">19</span></div>
+      </div>
+
+      <div class="s-check">
+        <div class="eyebrow teal">No context rot</div>
+        <h2>Every iteration has <em>fresh context.</em></h2>
+        <ol>
+          <li><p>Each task starts with <em>fresh context</em> — no rot carried over.</p></li>
+          <li><p>Verification is <em>self-contained</em> within the task.</p></li>
+          <li><p>Learnings are <em>shared between runs</em> — through files, not the window.</p></li>
+          <li><p>Changes stay <em>small and targeted.</em></p></li>
+        </ol>
+        <div style="margin-top:14px;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:22px;color:var(--ink-2)">… this pattern is not very different from classic problem solving — divide, conquer, write it down.</div>
+      </div>
+
+      <aside class="notes">
+        And here's why this beats context rot. Every iteration starts with fresh context — the agent reloads the prompt and the task, so nothing rots. Verification is self-contained inside each task. Learnings carry between runs through files on disk, not through an ever-growing context window. And every change stays small and targeted. Honestly, this isn't far from classic problem-solving: divide and conquer, and write down what you learned.
+      </aside>
+    </section>
+
+    <!-- slide 20 · CH5 OPENER -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>Chapter opener</span><span class="folio">20</span></div>
+      </div>
+      <div class="s-chap">
+        <div class="kicker">Chapter five</div>
+        <div class="num">05</div>
+        <h2>The <em>Real</em> Refactor.</h2>
+        <div class="sub">Greenfield is easy. Could Ralph do a month of legacy work?</div>
+      </div>
+      <aside class="notes">
+        Chapter five. Everything so far works beautifully for greenfield code. The real test is legacy — the four-hundred-and-fifty-thousand-line codebase. This is where I actually pointed Ralph at production work.
+      </aside>
+    </section>
+
+    <!-- slide 21 · the estimate / the question -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>The bet</span><span class="folio">21</span></div>
+      </div>
+
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:30px">
+        <div class="eyebrow mustard">Works well for greenfield — but this was legacy</div>
+        <div class="s-stat" style="position:static;padding:0;align-items:flex-start;text-align:left;gap:8px">
+          <div class="big" style="font-size:180px">1 month</div>
+          <div class="legend" style="text-align:left">our estimate for a developer to do this refactor — <b>and that's for someone already familiar with the codebase.</b></div>
+        </div>
+        <div style="margin-top:10px;font-family:Geist,sans-serif;font-weight:700;font-size:54px;letter-spacing:-1.6px;color:var(--ink)">
+          What if <em style="color:var(--clay);font-style:normal">Ralph</em> can do it?
+        </div>
+      </div>
+
+      <aside class="notes">
+        We sat down and estimated this refactor at about one developer-month — and that's the estimate for someone who already knew the codebase well. For anyone else, longer. So the question I couldn't resist: what if Ralph can do it? That's the bet the rest of the talk is about.
+      </aside>
+    </section>
+
+    <!-- slide 22 · uninterrupted run -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>Let it run</span><span class="folio">22</span></div>
+      </div>
+
+      <div class="s-inline">
+        <div class="eyebrow">Uninterrupted agent run</div>
+        <div class="line">Configure the agent to run <em>without asking for permission.</em></div>
+        <div style="margin-top:18px;display:flex;gap:18px;flex-wrap:wrap">
+          <code style="font-family:'Geist Mono',monospace;font-size:22px;background:#001226;color:#16d987;padding:14px 22px;border-radius:10px">--yolo</code>
+          <code style="font-family:'Geist Mono',monospace;font-size:22px;background:#001226;color:#ff8c00;padding:14px 22px;border-radius:10px">--dangerously-skip-permissions</code>
+        </div>
+        <div class="src">The loop only pays off if the agent isn't stopping every step to ask</div>
+      </div>
+
+      <aside class="notes">
+        For the loop to actually run unattended, the agent can't stop and ask for permission on every file edit or command. So you run it in what the tools call yolo mode — dangerously-skip-permissions. The name is a warning, and it's earned: you only do this inside guardrails. Which is exactly what the next few slides are — the guardrails that make an uninterrupted run safe.
+      </aside>
+    </section>
+
+    <!-- slide 23 · commit-validate loop -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>Guardrail · regression</span><span class="folio">23</span></div>
+      </div>
+
+      <div class="s-check" style="padding-top:70px;padding-bottom:50px;justify-content:flex-start;gap:14px">
+        <div class="eyebrow">Commit-validate loop · verify changes do not introduce regression</div>
+        <h2>Every task ships through the <em>same gates.</em></h2>
+        <ol>
+          <li><p>Agent <b>implements the task</b> from <code style="font-family:'Geist Mono',monospace;color:var(--clay)">prd.json</code>.</p></li>
+          <li><p>Agent <b>adds unit tests</b> for additional coverage (from the acceptance criteria).</p></li>
+          <li><p>Agent runs a <b>full build and test</b> — monorepo and Bazel, in my case.</p></li>
+          <li><p>Agent <b>pushes a commit, opens a PR,</b> and triggers a CI build.</p></li>
+          <li><p>Agent <b>waits for CI to pass</b> before progressing to the next task.</p></li>
+        </ol>
+        <div style="margin-top:8px;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:22px;color:var(--clay)">… ready for human review.</div>
+      </div>
+
+      <aside class="notes">
+        The core guardrail is a commit-validate loop, built to catch regressions. For each task the agent implements the change from prd.json, adds unit tests for the coverage its acceptance criteria demand, runs a full build and test — for me that's a Bazel monorepo — then pushes a commit, opens a PR, and triggers CI. Crucially, it waits for CI to go green before moving to the next task. If CI fails, that becomes the next thing it fixes. Only then is it ready for human review.
+      </aside>
+    </section>
+
+    <!-- slide 24 · AI code reviews -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>Guardrail · review</span><span class="folio">24</span></div>
+      </div>
+
+      <div class="s-check" style="padding-top:78px;justify-content:flex-start;gap:16px">
+        <div class="eyebrow">AI code reviews · make code review effective for humans</div>
+        <h2>Human review is the <em>quality gate</em> — so make it count.</h2>
+        <ol>
+          <li><p>Automated code reviews using <b>Prizm.</b><sup style="color:var(--clay);font-size:13px">1</sup></p></li>
+          <li><p>Reviewed with a <b>different thinking model</b> — Opus 4.5 / GPT-5.3-high.</p></li>
+          <li><p><b>Iterate</b> until all potential issues are addressed.</p></li>
+        </ol>
+        <div style="margin-top:6px;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:22px;color:var(--clay)">… ready for human review.</div>
+        <div style="margin-top:18px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.04em;color:var(--muted)">
+          <sup>1</sup> engineering.salesforce.com/scaling-code-reviews-adapting-to-a-surge-in-ai-generated-code
+        </div>
+      </div>
+
+      <aside class="notes">
+        Human review is the real quality gate — but a human shouldn't be the first to read raw agent output. So before it reaches me, the PR goes through automated AI code review with a tool we call Prizm, and importantly with a different thinking model than the one that wrote the code — Opus 4.5 or GPT-5.3-high. A reviewer that thinks differently from the author catches more. The agent iterates against that review until the issues are addressed. Then, and only then, it's ready for a human.
+      </aside>
+    </section>
+
+    <!-- slide 25 · PR approval -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>The human in the loop</span><span class="folio">25</span></div>
+      </div>
+
+      <div class="s-list">
+        <div class="head">
+          <div>
+            <div class="eyebrow">PR approval</div>
+            <h2>The human still <em>approves.</em></h2>
+          </div>
+        </div>
+        <ol>
+          <li><p>Human review <b>validates the approach</b> — not just the diff.</p></li>
+          <li><p>It gives <b>insight into the agent's decisions.</b></p></li>
+          <li><p>A lot of <b>unwritten knowledge</b> lives only with humans.</p></li>
+          <li><p>A good human review helps <em>prevent AI slop.</em></p></li>
+        </ol>
+      </div>
+
+      <aside class="notes">
+        And the human approval still matters, for reasons that go beyond catching bugs. The review validates the approach, not just the diff. It gives me insight into why the agent made the decisions it made. A lot of context about this system is unwritten — it lives in people's heads — and that's exactly what a human reviewer brings. Done well, human review is the thing that keeps AI slop out of the codebase.
+      </aside>
+    </section>
+
+    <!-- slide 26 · result -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 5</div>
+        <div class="right"><span>The result</span><span class="folio">26</span></div>
+      </div>
+
+      <div class="s-check" style="padding-top:78px;justify-content:flex-start;gap:16px">
+        <div class="eyebrow teal">Result · developer productivity improves</div>
+        <h2>A developer-month became <em>a few hours a week.</em></h2>
+        <ol>
+          <li><p>It took me <b>a few hours a week</b> to get through the whole refactor.</p></li>
+          <li><p>The agent <b>maintained quality</b> — managing test coverage and keeping CI green.</p></li>
+          <li><p>I <b>outsourced the tedium</b> to the agent — and that <em>improved morale.</em></p></li>
+        </ol>
+      </div>
+
+      <aside class="notes">
+        So — the result. The refactor we'd estimated at a developer-month got done in a few hours a week of my time, spread over the calendar. And the agent held the quality bar: it managed test coverage and kept CI green throughout. The honest win, though, is morale — I outsourced the tedious mechanical work to the agent and got to spend my attention on the judgment calls. That's a better job.
+      </aside>
+    </section>
+
+    <!-- slide 27 · CH6 KEY TAKEAWAYS -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · CH 6</div>
+        <div class="right"><span>Key takeaways</span><span class="folio">27</span></div>
+      </div>
+
+      <div style="position:absolute;inset:64px 80px 56px;display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div class="eyebrow">Key takeaways · Ralph loop works through context management</div>
+          <h2 style="font-family:Geist,sans-serif;font-size:46px;line-height:1.04;letter-spacing:-1.6px;margin:6px 0 0;color:var(--ink)">What I'd <em style="color:var(--clay);font-style:normal">carry forward.</em></h2>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:18px;min-height:0">
+          <div style="border:1.5px solid var(--rule);border-radius:14px;background:rgba(255,252,240,.5);padding:22px 26px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);font-weight:700">01 · fresh context</div>
+            <div style="font-size:20px;font-weight:600;color:var(--ink);line-height:1.2">LLM agents are very accurate with fresh context.</div>
+            <div style="font-size:15px;color:var(--ink-2);line-height:1.5">Reset the window each turn — don't let history rot.</div>
+          </div>
+          <div style="border:1.5px solid var(--rule);border-radius:14px;background:rgba(255,252,240,.5);padding:22px 26px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);font-weight:700">02 · small verifiable tasks</div>
+            <div style="font-size:20px;font-weight:600;color:var(--ink);line-height:1.2">Agent loops accurately solve small, verifiable tasks.</div>
+            <div style="font-size:15px;color:var(--ink-2);line-height:1.5">Scope tight, define done, let the loop grind.</div>
+          </div>
+          <div style="border:1.5px solid var(--clay);border-radius:14px;background:rgba(15,122,255,.05);padding:22px 26px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);font-weight:700">03 · the plan is everything</div>
+            <div style="font-size:20px;font-weight:600;color:var(--ink);line-height:1.2">Plan is the most important step in the agent SDLC.</div>
+            <div style="font-size:14.5px;color:var(--ink-2);line-height:1.45">Plan with an <b>expensive model</b> (Opus, GPT-5.x-high). Implement with a <b>cheaper one</b> (Sonnet 4.5, Composer 1, GPT-Codex, Gemini Flash).</div>
+          </div>
+          <div style="border:1.5px solid var(--rule);border-radius:14px;background:rgba(255,252,240,.5);padding:22px 26px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-family:Geist Mono,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);font-weight:700">04 · SDLC is a prerequisite</div>
+            <div style="font-size:20px;font-weight:600;color:var(--ink);line-height:1.2">Code reviews, test coverage, and CI are prerequisites.</div>
+            <div style="font-size:15px;color:var(--ink-2);line-height:1.5">Best practices aren't optional — they're what make autonomy safe.</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="notes">
+        Four takeaways. One: LLM agents are remarkably accurate when the context is fresh — that's the whole game. Two: agent loops reliably solve small, verifiable tasks, so the work is to break problems down that way. Three: the plan is the single most important step — plan with an expensive, strong model like Opus or a high-reasoning GPT, and you can implement with cheaper models like Sonnet 4.5, Composer 1, GPT-Codex, or Gemini Flash. And four: this only works on top of real SDLC discipline — code reviews, test coverage, and CI aren't nice-to-haves, they're the prerequisites that make autonomy safe.
+      </aside>
+    </section>
+
+    <!-- slide 28 · demo repo -->
+    <section class="dark" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · DEMO</div>
+        <div class="right"><span>Try it yourself</span><span class="folio">28</span></div>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:28px">
+        <div class="eyebrow" style="color:var(--mustard)">Demo repository</div>
+        <div style="font-family:Geist,sans-serif;font-weight:700;font-size:56px;letter-spacing:-1.8px;color:#e6eef7;line-height:1.05">Everything is on <em style="color:var(--clay-soft);font-style:normal">GitHub.</em></div>
+        <a href="https://github.com/tuhinkanti/developerweek2026-ralph-demo" style="font-family:'Geist Mono',monospace;font-size:24px;color:var(--clay-soft);text-decoration:none;border:1px solid #1c4f8b;border-radius:10px;padding:18px 24px;display:inline-block;width:fit-content">github.com/tuhinkanti/developerweek2026-ralph-demo</a>
+        <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-size:22px;color:#c9d6ea">The Ralph demo, the <code style="font-family:'Geist Mono',monospace;font-style:normal">prd.json</code> format, and the loop scaffolding — clone it and run it.</div>
+      </div>
+      <aside class="notes">
+        If you want to play with this, everything's on GitHub — the Ralph demo, the prd.json task format, and the loop scaffolding. Clone it, point it at a toy task, and watch the loop go. It's the fastest way to get the intuition.
+      </aside>
+    </section>
+
+    <!-- slide 29 · thank you / questions -->
+    <section class="sheet" data-transition="fade">
+      <div class="chrome">
+        <div><span class="dot"></span>AI IN PRODUCTION · END</div>
+        <div class="right"><span>Thank you</span><span class="folio">29</span></div>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:96px 120px;gap:40px">
+        <div class="eyebrow">End card</div>
+        <div style="font-family:Geist,sans-serif;font-weight:700;font-size:140px;line-height:.92;letter-spacing:-0.05em;color:var(--ink)">Thank you <em style="color:var(--clay);font-style:normal;font-weight:800">!</em></div>
+        <div style="width:96px;height:3px;background:var(--clay)"></div>
+        <div style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:500;font-size:24px;color:var(--ink-2);max-width:880px">
+          Questions welcome — and please leave <em style="color:var(--clay);font-style:italic;font-weight:600">feedback.</em> Find me at <span style="font-family:'Geist Mono',monospace;font-style:normal;font-size:18px">linkedin.com/in/tuhin-kanti-sharma</span> · X <span style="font-family:'Geist Mono',monospace;font-style:normal;font-size:18px">@onlytuhinkanti</span>
+        </div>
+      </div>
+      <aside class="notes">
+        That's the talk. Thank you. I'd love your questions — and if you have a couple of minutes, please leave feedback; it genuinely helps me make the next one better. You can find me on LinkedIn and on X at onlytuhinkanti.
+      </aside>
+    </section>
+
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    width:  1280,
+    height: 720,
+    margin: 0,
+    minScale: 0.2,
+    maxScale: 2.0,
+
+    center: false,
+    controls: true,
+    controlsTutorial: false,
+    progress: true,
+    hash: true,
+    history: false,
+    keyboard: true,
+    touch: true,
+    loop: false,
+    slideNumber: 'c/t',
+    showSlideNumber: 'speaker',
+
+    transition: 'fade',
+    transitionSpeed: 'default',
+    backgroundTransition: 'none',
+
+    overview: true,
+    help: true,
+
+    plugins: [ RevealNotes ]
+  });
+</script>
+</body>
+</html>
